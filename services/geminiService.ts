@@ -15,7 +15,7 @@ Se o usuário pedir para ALTERAR ou ATUALIZAR uma tarefa existente (ex: "mudar p
 1. Procurar no "Contexto Atual" qual tarefa se assemelha ao pedido.
 2. Usar a ação "UPDATE_TASK" e incluir o "id" da tarefa encontrada no payload.
 
-Você deve retornar um objeto JSON com a seguinte estrutura:
+Você deve retornar APENAS um objeto JSON com a seguinte estrutura, sem markdown:
 {
   "reply": "Sua resposta falada aqui.",
   "action": {
@@ -25,7 +25,7 @@ Você deve retornar um objeto JSON com a seguinte estrutura:
 }
 
 formatos de payload:
-- ADD_TRANSACTION: { description: string, amount: number, type: "INCOME"|"EXPENSE"|"INVESTMENT", category: string, date: string (ISO), recurrence?: "MONTHLY"|"WEEKLY" }
+- ADD_TRANSACTION: { description: string, amount: number, type: "INCOME"|"EXPENSE"|"INVESTMENT", category: string, date: string (ISO), recurrencePeriod?: "MONTHLY"|"WEEKLY"|"NONE" }
 - ADD_TASK: { title: string, date: string (YYYY-MM-DD), time: string (HH:MM), priority: "low"|"medium"|"high" }
 - UPDATE_TASK: { id: string, updates: { priority?: "high", date?: string, time?: string, title?: string } }
 
@@ -65,8 +65,8 @@ export const sendMessageToAlfred = async (
     });
 
     let text = response.text || '{}';
-    // Remove markdown code blocks if present to ensure clean JSON
-    text = text.replace(/```json/g, '').replace(/```/g, '');
+    // Remove markdown code blocks (```json ... ```) case insensitive
+    text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
 
     return JSON.parse(text) as AIResponse;
   } catch (error) {

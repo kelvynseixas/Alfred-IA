@@ -88,6 +88,13 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
       setIsModalOpen(true);
   };
 
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Remove leading zeros
+      let val = e.target.value.replace(/^0+/, '');
+      if (val === '') val = ''; // allow empty
+      setNewTrans({ ...newTrans, amount: val });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTrans.description || !newTrans.amount) return;
@@ -204,7 +211,9 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
       </div>
 
       {/* SECTION 2: CHARTS (BELOW) */}
+      <h3 className={`text-lg font-serif mb-4 ${textPrimary}`}>Análise Visual</h3>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+           
            {/* Chart 1: Overview Bar Chart (Spans 2 cols on large) */}
            <div className={`p-4 rounded-xl border md:col-span-4 lg:col-span-2 ${cardBg}`}>
                 <h3 className={`text-xs font-bold uppercase mb-4 ${textSecondary}`}>Comparativo Geral</h3>
@@ -228,50 +237,52 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                 </div>
            </div>
 
-           {/* Chart 2: Income Breakdown */}
-           <div className={`p-4 rounded-xl border md:col-span-2 lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2 ${cardBg}`}>
-               
-               <div className="flex flex-col items-center">
-                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-emerald-500`}>Categorias (Entrada)</h3>
-                   <div className="w-full h-32">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={incomeChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
-                                    {incomeChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INCOME[index % COLORS_INCOME.length]} />))}
-                                </Pie>
-                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                   </div>
-               </div>
+           {/* 3 INDIVIDUAL PIE CHARTS */}
+           <div className="md:col-span-4 lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Income Pie */}
+                <div className={`p-3 rounded-xl border flex flex-col items-center ${cardBg}`}>
+                     <h3 className="text-[10px] font-bold uppercase mb-2 text-emerald-500">Categorias (Entrada)</h3>
+                     <div className="w-full h-40">
+                         <ResponsiveContainer width="100%" height="100%">
+                             <PieChart>
+                                 <Pie data={incomeChartData} innerRadius={25} outerRadius={50} paddingAngle={2} dataKey="value">
+                                     {incomeChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INCOME[index % COLORS_INCOME.length]} />))}
+                                 </Pie>
+                                 <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                             </PieChart>
+                         </ResponsiveContainer>
+                     </div>
+                </div>
 
-               <div className="flex flex-col items-center">
-                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-red-500`}>Categorias (Saída)</h3>
-                   <div className="w-full h-32">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={expenseChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
-                                    {expenseChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_EXPENSE[index % COLORS_EXPENSE.length]} />))}
-                                </Pie>
-                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                   </div>
-               </div>
+                {/* Expense Pie */}
+                <div className={`p-3 rounded-xl border flex flex-col items-center ${cardBg}`}>
+                     <h3 className="text-[10px] font-bold uppercase mb-2 text-red-500">Categorias (Saída)</h3>
+                     <div className="w-full h-40">
+                         <ResponsiveContainer width="100%" height="100%">
+                             <PieChart>
+                                 <Pie data={expenseChartData} innerRadius={25} outerRadius={50} paddingAngle={2} dataKey="value">
+                                     {expenseChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_EXPENSE[index % COLORS_EXPENSE.length]} />))}
+                                 </Pie>
+                                 <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                             </PieChart>
+                         </ResponsiveContainer>
+                     </div>
+                </div>
 
-               <div className="flex flex-col items-center">
-                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-gold-500`}>Categorias (Invest.)</h3>
-                   <div className="w-full h-32">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={investChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
-                                    {investChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INVEST[index % COLORS_INVEST.length]} />))}
-                                </Pie>
-                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                   </div>
-               </div>
+                {/* Invest Pie */}
+                <div className={`p-3 rounded-xl border flex flex-col items-center ${cardBg}`}>
+                     <h3 className="text-[10px] font-bold uppercase mb-2 text-gold-500">Categorias (Invest.)</h3>
+                     <div className="w-full h-40">
+                         <ResponsiveContainer width="100%" height="100%">
+                             <PieChart>
+                                 <Pie data={investChartData} innerRadius={25} outerRadius={50} paddingAngle={2} dataKey="value">
+                                     {investChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INVEST[index % COLORS_INVEST.length]} />))}
+                                 </Pie>
+                                 <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                             </PieChart>
+                         </ResponsiveContainer>
+                     </div>
+                </div>
            </div>
       </div>
 
@@ -306,7 +317,14 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Valor (R$)</label>
-                            <input type="number" step="0.01" className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" value={newTrans.amount} onChange={e => setNewTrans({...newTrans, amount: e.target.value})} required />
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" 
+                                value={newTrans.amount} 
+                                onChange={handleAmountChange}
+                                required 
+                            />
                         </div>
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Categoria</label>
