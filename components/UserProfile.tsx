@@ -82,8 +82,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                         <span className="text-gold-400 font-bold">{user.subscription || 'TRIAL'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Módulos</span>
-                        <span className="text-emerald-400 font-bold">TODOS</span>
+                        <span className="text-slate-400">Status</span>
+                        <span className={user.active ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                            {user.active ? 'ATIVO' : 'SUSPENSO'}
+                        </span>
                     </div>
                 </div>
             </div>

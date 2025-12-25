@@ -11,7 +11,8 @@ import {
   UserRole,
   SubscriptionType,
   AIActionType,
-  Notification
+  Notification,
+  Plan
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
 import { TaskModule } from './components/TaskModule';
@@ -33,9 +34,17 @@ const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // --- Data Mocks ---
+  // --- Database Mock Data (Postgres Ready Structure) ---
   const [notifications, setNotifications] = useState<Notification[]>([
     { id: 'n1', title: 'Conta a Vencer', message: 'Energia Elétrica vence amanhã.', type: 'FINANCE', read: false, date: new Date().toISOString() }
+  ]);
+
+  // Default Plans
+  const [plans, setPlans] = useState<Plan[]>([
+    { id: 'p1', name: 'Mensal Básico', type: SubscriptionType.MONTHLY, price: 39.90, trialDays: 15, active: true },
+    { id: 'p2', name: 'Semestral Econômico', type: SubscriptionType.SEMIANNUAL, price: 199.50, trialDays: 15, active: true }, // ~33.25/mo
+    { id: 'p3', name: 'Trimestral Flex', type: SubscriptionType.QUARTERLY, price: 119.70, trialDays: 7, active: true },
+    { id: 'p4', name: 'Anual Premium', type: SubscriptionType.ANNUAL, price: 399.00, trialDays: 30, active: true }
   ]);
 
   const [transactions, setTransactions] = useState<Transaction[]>([
@@ -67,15 +76,17 @@ const App = () => {
 
   // --- Auth Handlers ---
   const handleLogin = (email: string, pass: string) => {
-    // Admin check as per request
     if (email === 'maisalem.md@gmail.com' && pass === 'Alfred@1992') {
       setCurrentUser(users[0]);
       setIsAuthenticated(true);
       return;
     }
-    // Simple User login for mock
     const user = users.find(u => u.email === email);
     if (user) {
+      if(!user.active) {
+        alert("Acesso suspenso. Contate o administrador.");
+        return;
+      }
       setCurrentUser(user);
       setIsAuthenticated(true);
     } else {
@@ -84,6 +95,9 @@ const App = () => {
   };
 
   const handleRegister = (name: string, email: string, phone: string, subscription: SubscriptionType) => {
+    const selectedPlan = plans.find(p => p.type === subscription);
+    const trialDays = selectedPlan ? selectedPlan.trialDays : 15;
+
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -91,7 +105,7 @@ const App = () => {
       phone,
       role: UserRole.USER,
       subscription,
-      trialEndsAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+      trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString(),
       active: true,
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS],
       since: new Date().getFullYear().toString(),
@@ -108,17 +122,89 @@ const App = () => {
     setActiveModule(ModuleType.FINANCE);
   };
 
-  // --- Data Handlers ---
+  // --- Data Handlers (Mapped to DB Actions) ---
   const handleToggleTask = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE } : t));
   const handleToggleListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.map(i => i.id === iId ? { ...i, status: i.status === ItemStatus.DONE ? ItemStatus.PENDING : ItemStatus.DONE } : i) } : l));
   const handleDeleteListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.filter(i => i.id !== iId) } : l));
+  
   const handleAddTransaction = (t: Omit<Transaction, 'id'>) => setTransactions(prev => [...prev, { ...t, id: Date.now().toString() }]);
   const handleDeleteTransaction = (id: string) => setTransactions(prev => prev.filter(t => t.id !== id));
+  
   const handleAddTask = (t: Omit<Task, 'id'>) => setTasks(prev => [...prev, { ...t, id: Date.now().toString() }]);
 
+  // --- Admin Actions Handlers ---
+  const handleUpdateUser = (updatedUser: User) => {
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    if (currentUser?.id === updatedUser.id) {
+        setCurrentUser(updatedUser);
+    }
+  };
+
+  const handleAddUser = (user: User) => {
+    setUsers(prev => [...prev, user]);
+  };
+
+  const handleManagePlan = (plan: Plan, action: 'CREATE' | 'UPDATE' | 'DELETE') => {
+      if (action === 'CREATE') setPlans(prev => [...prev, plan]);
+      if (action === 'UPDATE') setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
+      if (action === 'DELETE') setPlans(prev => prev.filter(p => p.id !== plan.id));
+  };
+
+  // --- AI Action Logic (Fixed) ---
   const handleAIAction = (action: { type: AIActionType, payload: any }) => {
-    if (action.type === 'ADD_TRANSACTION') handleAddTransaction(action.payload);
-    if (action.type === 'ADD_TASK') handleAddTask(action.payload);
+    console.log("AI Action Received:", action);
+
+    if (action.type === 'ADD_TRANSACTION') {
+        handleAddTransaction({
+            description: action.payload.description || 'Transação IA',
+            amount: Number(action.payload.amount),
+            type: action.payload.type || TransactionType.EXPENSE,
+            category: action.payload.category || 'Geral',
+            date: action.payload.date || new Date().toISOString()
+        });
+    }
+    
+    if (action.type === 'ADD_TASK') {
+        handleAddTask({
+            title: action.payload.title,
+            date: action.payload.date || new Date().toISOString(),
+            time: action.payload.time,
+            priority: action.payload.priority || 'medium',
+            status: TaskStatus.PENDING
+        });
+    }
+
+    if (action.type === 'UPDATE_TASK') {
+        // Simplified update logic (title match)
+        setTasks(prev => prev.map(t => 
+            t.title.toLowerCase().includes(action.payload.searchTitle?.toLowerCase()) 
+            ? { ...t, ...action.payload.updates } 
+            : t
+        ));
+    }
+
+    if (action.type === 'ADD_LIST_ITEM') {
+        const listName = action.payload.listName || 'Geral';
+        const itemName = action.payload.itemName;
+        
+        setLists(prev => {
+            const listExists = prev.find(l => l.name.toLowerCase() === listName.toLowerCase());
+            
+            if (listExists) {
+                return prev.map(l => l.id === listExists.id ? {
+                    ...l,
+                    items: [...l.items, { id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }]
+                } : l);
+            } else {
+                // Create new list if not exists
+                return [...prev, {
+                    id: Date.now().toString(),
+                    name: listName,
+                    items: [{ id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }]
+                }];
+            }
+        });
+    }
   };
 
   if (!isAuthenticated) {
@@ -204,8 +290,17 @@ const App = () => {
             {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={handleAddTransaction} onDeleteTransaction={handleDeleteTransaction} isDarkMode={isDarkMode} />}
             {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={handleToggleTask} onAddTask={handleAddTask} />}
             {activeModule === ModuleType.LISTS && <ListModule lists={lists} onToggleItem={handleToggleListItem} onDeleteItem={handleDeleteListItem} />}
-            {activeModule === ModuleType.ADMIN && currentUser?.role === UserRole.ADMIN && <AdminPanel users={users} isDarkMode={isDarkMode} />}
-            {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={(u) => { setUsers(users.map(us => us.id === u.id ? u : us)); setCurrentUser(u); }} />}
+            {activeModule === ModuleType.ADMIN && currentUser?.role === UserRole.ADMIN && (
+                <AdminPanel 
+                    users={users} 
+                    plans={plans}
+                    isDarkMode={isDarkMode} 
+                    onUpdateUser={handleUpdateUser}
+                    onAddUser={handleAddUser}
+                    onManagePlan={handleManagePlan}
+                />
+            )}
+            {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
           </div>
         </div>
 

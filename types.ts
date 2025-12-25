@@ -15,8 +15,18 @@ export enum UserRole {
 
 export enum SubscriptionType {
   MONTHLY = 'MONTHLY',
-  SEMIANNUAL = 'SEMIANNUAL',
+  QUARTERLY = 'QUARTERLY', // Trimestral
+  SEMIANNUAL = 'SEMIANNUAL', // Semestral
   ANNUAL = 'ANNUAL'
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  type: SubscriptionType;
+  price: number;
+  trialDays: number;
+  active: boolean;
 }
 
 export enum TransactionType {
@@ -26,12 +36,12 @@ export enum TransactionType {
 }
 
 export interface Transaction {
-  id: string;
+  id: string; // UUID in Postgres
   description: string;
   amount: number;
   type: TransactionType;
   category: string;
-  date: string;
+  date: string; // ISO Timestamp
 }
 
 export enum TaskStatus {
@@ -42,7 +52,7 @@ export enum TaskStatus {
 }
 
 export interface Task {
-  id: string;
+  id: string; // UUID in Postgres
   title: string;
   date: string; // ISO date string
   time?: string;
@@ -64,7 +74,7 @@ export interface ListItem {
 }
 
 export interface ListGroup {
-  id: string;
+  id: string; // UUID in Postgres
   name: string;
   items: ListItem[];
 }
@@ -80,12 +90,13 @@ export interface Dependent {
 }
 
 export interface User {
-  id: string;
+  id: string; // UUID in Postgres
   name: string;
   email: string;
   phone: string;
   role: UserRole;
   subscription?: SubscriptionType;
+  planId?: string; // Relation to Plan table
   trialEndsAt?: string;
   active: boolean;
   modules: ModuleType[];
@@ -117,14 +128,22 @@ export interface Coupon {
 
 export interface SystemConfig {
   aiProvider: 'GEMINI' | 'OPENAI' | 'ANTHROPIC';
-  aiApiKey: string;
-  webhookUrl: string;
+  aiKeys: {
+    gemini?: string;
+    openai?: string;
+    anthropic?: string;
+  };
+  
+  // Automation & Messaging
+  webhookUrl: string; // N8N, Backend Custom
   evolutionApi: {
     enabled: boolean;
     baseUrl: string;
     globalApiKey: string;
     instanceName: string;
+    instanceToken?: string;
   };
+
   paymentGateway: 'ASAAS' | 'STRIPE' | 'MERCADOPAGO';
   paymentApiKey: string;
   branding: {
@@ -138,8 +157,8 @@ export interface SystemConfig {
 export type AIActionType = 
   | 'ADD_TRANSACTION' 
   | 'ADD_TASK' 
+  | 'UPDATE_TASK'
   | 'ADD_LIST_ITEM' 
-  | 'UPDATE_TASK' 
   | 'COMPLETE_LIST_ITEM'
   | 'NONE';
 
