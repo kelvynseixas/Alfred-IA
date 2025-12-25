@@ -19,6 +19,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, isDarkMode }) => 
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
 
+  // Estado inicial robusto
   const [config, setConfig] = useState<SystemConfig>({
       timezone: 'America/Sao_Paulo',
       aiProvider: 'GEMINI',
@@ -40,11 +41,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, isDarkMode }) => 
   }, []);
 
   const fetchConfig = async () => {
-    const res = await fetch('/api/data/dashboard', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }
-    });
-    const data = await res.json();
-    if (data.config) setConfig(data.config);
+    try {
+        const res = await fetch('/api/data/dashboard', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }
+        });
+        const data = await res.json();
+        
+        // Merge inteligente para evitar undefined em objetos aninhados se o banco retornar config parcial
+        if (data.config && Object.keys(data.config).length > 0) {
+            setConfig(prev => ({
+                ...prev,
+                ...data.config,
+                aiKeys: { ...prev.aiKeys, ...(data.config.aiKeys || {}) },
+                paymentGateway: { ...prev.paymentGateway, ...(data.config.paymentGateway || {}) },
+                branding: { ...prev.branding, ...(data.config.branding || {}) }
+            }));
+        }
+    } catch (e) {
+        console.error("Erro ao carregar configs:", e);
+    }
   };
 
   const handleSaveConfig = async () => {
@@ -106,7 +121,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, isDarkMode }) => 
                       <label className="block text-xs text-slate-400 mb-2 uppercase font-bold">Google Gemini API Key</label>
                       <input 
                         type="password" 
-                        value={config.aiKeys.gemini} 
+                        value={config.aiKeys?.gemini || ''} 
                         onChange={e => setConfig({...config, aiKeys: {...config.aiKeys, gemini: e.target.value}})}
                         className={inputClass}
                         placeholder="Insira sua chave da API do Google AI Studio"
@@ -149,11 +164,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, isDarkMode }) => 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className="block text-xs text-slate-400 mb-2 uppercase font-bold">Email</label>
-                      <input type="email" value={config.paymentGateway.email} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={inputClass} />
+                      <input type="email" value={config.paymentGateway?.email || ''} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={inputClass} />
                   </div>
                   <div>
                       <label className="block text-xs text-slate-400 mb-2 uppercase font-bold">Token</label>
-                      <input type="password" value={config.paymentGateway.token} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={inputClass} />
+                      <input type="password" value={config.paymentGateway?.token || ''} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={inputClass} />
                   </div>
               </div>
           </div>

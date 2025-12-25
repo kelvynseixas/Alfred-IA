@@ -24,9 +24,10 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, o
   };
 
   const formatDateDisplay = (dateStr: string) => {
-      // Input is YYYY-MM-DD. We want DD/MM/YYYY without timezone shift.
       if(!dateStr) return '';
-      const [year, month, day] = dateStr.split('-');
+      // Garante que pegamos apenas a parte da data YYYY-MM-DD da string ISO (ex: 2025-12-24T23:00...)
+      const cleanDate = dateStr.split('T')[0];
+      const [year, month, day] = cleanDate.split('-');
       return `${day}/${month}/${year}`;
   };
 
@@ -38,7 +39,9 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, o
 
   const openEditTaskModal = (task: Task) => {
       setEditingTask(task.id);
-      setTaskForm({ ...task });
+      // Extrai data correta para o input type="date"
+      const dateForInput = task.date ? task.date.split('T')[0] : '';
+      setTaskForm({ ...task, date: dateForInput });
       setIsModalOpen(true);
   };
 
