@@ -3,13 +3,18 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Configuração CORS e JSON
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos do React (pasta dist na raiz)
+app.use(express.static(path.join(__dirname, '../dist')));
 
 const pool = new Pool({
     user: process.env.DB_USER || 'alfred',
@@ -40,12 +45,18 @@ app.post('/api/auth/login', async (req, res) => {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário não encontrado' });
         const user = result.rows[0];
+        
+        // Verifica a senha
         const validPassword = await bcrypt.compare(password, user.password_hash);
         if (!validPassword) return res.status(401).json({ error: 'Senha incorreta' });
+        
         const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY, { expiresIn: '24h' });
         delete user.password_hash;
         res.json({ token, user: { ...user, id: user.id.toString() } });
-    } catch (err) { res.status(500).json({ error: 'Erro no login' }); }
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ error: 'Erro no login' }); 
+    }
 });
 
 // --- DATA DASHBOARD ---
@@ -55,12 +66,16 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
         const tasks = await pool.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY date ASC', [userId]);
         const transactions = await pool.query('SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC', [userId]);
         const config = await pool.query('SELECT value FROM system_configs WHERE key = $1', ['general_config']);
+        
         res.json({
             tasks: tasks.rows,
             transactions: transactions.rows,
             config: config.rows[0]?.value || {}
         });
-    } catch (err) { res.status(500).json({ error: 'Erro ao buscar dados' }); }
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar dados' }); 
+    }
 });
 
 // --- TRANSACTIONS ---
@@ -111,7 +126,15 @@ app.post('/api/admin/config', authenticateToken, async (req, res) => {
             ['general_config', req.body]
         );
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'Erro ao salvar config' }); }
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao salvar config' }); 
+    }
 });
 
-app.listen(port, () => console.log(`Alfred Backend running on port ${port}`));
+// Rota Catch-all para servir o React Router (SPA)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
+app.listen(port, '0.0.0.0', () => console.log(`Alfred Backend running on port ${port}`));
