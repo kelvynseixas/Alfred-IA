@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
-import { User as UserIcon, Mail, Lock, Eye, EyeOff, Camera, Phone, FileText } from 'lucide-react';
+import { User, UserRole, Plan } from '../types';
+import { User as UserIcon, Mail, Lock, Eye, EyeOff, Camera, Phone, FileText, CreditCard, AlertTriangle } from 'lucide-react';
 
 interface UserProfileProps {
   user: User;
+  plans?: Plan[];
   isDarkMode: boolean;
   onUpdateUser: (u: User) => void;
 }
 
-export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUpdateUser }) => {
+export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMode, onUpdateUser }) => {
   const [showPass, setShowPass] = useState(false);
   
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -17,6 +18,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
         onUpdateUser({ ...user, avatarUrl: url });
     }
   };
+
+  const getDaysRemaining = () => {
+    if (!user.trialEndsAt) return 0;
+    const end = new Date(user.trialEndsAt);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    return Math.ceil(diff / (1000 * 3600 * 24)); 
+  };
+  const daysRemaining = getDaysRemaining();
+  
+  // Resolve Plan Name
+  const currentPlan = plans?.find(p => p.id === user.planId) || plans?.find(p => p.type === user.subscription);
 
   const cardClass = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm';
   const inputClass = isDarkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900';
@@ -44,20 +57,32 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                 <h3 className={`text-xl font-medium ${textPrimary}`}>{user.name}</h3>
                 <p className="text-slate-400 text-sm mb-4 uppercase font-bold tracking-widest">{user.role}</p>
                 
-                {user.trialEndsAt && (
-                   <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-bold border border-emerald-500/20 uppercase">
-                      Teste até {new Date(user.trialEndsAt).toLocaleDateString()}
-                   </div>
+                {daysRemaining <= 5 && (
+                    <button className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded font-bold text-sm flex items-center justify-center gap-2 mb-2 animate-pulse shadow-lg">
+                        <CreditCard size={16} /> Pagar Agora
+                    </button>
                 )}
             </div>
 
             <div className={`rounded-xl border p-6 ${cardClass}`}>
                 <h4 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Assinatura</h4>
-                <div className="space-y-3">
+                <div className="space-y-4">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-slate-400">Plano</span>
+                        <span className="text-white font-bold">{currentPlan ? currentPlan.name : user.subscription}</span>
+                    </div>
                     <div className="flex justify-between text-sm">
                         <span className="text-slate-400">Ciclo</span>
-                        <span className="text-gold-400 font-bold">{user.subscription || 'TRIAL'}</span>
+                        <span className="text-gold-400 font-bold">{user.subscription}</span>
                     </div>
+                    
+                    <div className={`p-3 rounded border text-center ${daysRemaining <= 5 ? 'bg-red-500/10 border-red-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
+                         <p className={`text-xs uppercase font-bold mb-1 ${daysRemaining <= 5 ? 'text-red-400' : 'text-slate-500'}`}>Vencimento</p>
+                         <p className={`text-lg font-bold ${daysRemaining <= 5 ? 'text-red-500' : 'text-emerald-400'}`}>
+                             {daysRemaining > 0 ? `Falta ${daysRemaining} dias` : 'Vencido'}
+                         </p>
+                    </div>
+
                     <div className="flex justify-between text-sm">
                         <span className="text-slate-400">Status</span>
                         <span className={user.active ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>

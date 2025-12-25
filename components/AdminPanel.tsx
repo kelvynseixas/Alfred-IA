@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole, SystemConfig, SubscriptionType, Plan, Tutorial, Announcement } from '../types';
-import { Users, CreditCard, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, Plus, Trash2, Edit2, PlayCircle, Megaphone, Smartphone, Box, Percent, QrCode, FileText, Globe } from 'lucide-react';
+import { Users, CreditCard, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, Plus, Trash2, Edit2, PlayCircle, Megaphone, Smartphone, Box, Percent, QrCode, FileText, Globe, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -15,10 +15,17 @@ interface AdminPanelProps {
 }
 
 type AdminTab = 'DASHBOARD' | 'INTEGRATIONS' | 'PLANS' | 'BILLING' | 'TUTORIALS' | 'INFORMATICS';
+type SortField = 'expiry' | 'value' | 'status' | 'name';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('DASHBOARD');
   
+  // User Table State
+  const [sortField, setSortField] = useState<SortField>('expiry');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+
   // Modals
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [manageUser, setManageUser] = useState<User | null>(null);
@@ -56,6 +63,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
   const inputClass = isDarkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900';
 
   // --- Handlers ---
+  const handleSort = (field: SortField) => {
+      if (sortField === field) {
+          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortField(field);
+          setSortOrder('asc');
+      }
+  };
+
+  const getSortedUsers = () => {
+      return [...users].sort((a, b) => {
+          let valA: any = a[fieldToKey(sortField)];
+          let valB: any = b[fieldToKey(sortField)];
+
+          // Custom Logic for 'value' (plan price)
+          if (sortField === 'value') {
+               const planA = plans.find(p => p.type === a.subscription);
+               const planB = plans.find(p => p.type === b.subscription);
+               valA = planA ? planA.price : 0;
+               valB = planB ? planB.price : 0;
+          }
+          // Custom Logic for 'expiry'
+          if (sortField === 'expiry') {
+              valA = a.trialEndsAt ? new Date(a.trialEndsAt).getTime() : 0;
+              valB = b.trialEndsAt ? new Date(b.trialEndsAt).getTime() : 0;
+          }
+
+          if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+          if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+      });
+  };
+
+  const fieldToKey = (field: SortField): keyof User | string => {
+      switch(field) {
+          case 'name': return 'name';
+          case 'status': return 'active';
+          default: return 'name';
+      }
+  };
+
   const handleSavePlan = () => {
       if (!currentPlan.name || !currentPlan.price) return;
       onManagePlan({
@@ -68,6 +116,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
       }, currentPlan.id ? 'UPDATE' : 'CREATE');
       setIsPlanModalOpen(false);
       setCurrentPlan({ name: '', price: 0, trialDays: 15, active: true });
+  };
+
+  const handleDeletePlan = (plan: Plan) => {
+      if(window.confirm(`Tem certeza que deseja excluir o plano ${plan.name}?`)) {
+          onManagePlan(plan, 'DELETE');
+      }
   };
 
   const handleCreateTutorial = () => {
@@ -110,6 +164,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
   const metricsSemiannual = calculateMetrics(SubscriptionType.SEMIANNUAL);
   const metricsAnnual = calculateMetrics(SubscriptionType.ANNUAL);
 
+  // Pagination Logic
+  const sortedUsers = getSortedUsers();
+  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  const paginatedUsers = sortedUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   const renderDashboard = () => (
     <div className="space-y-6 animate-fade-in">
         {/* Subscription Breakdown */}
@@ -127,27 +186,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
 
         <div className={`rounded-xl border overflow-hidden ${cardClass}`}>
             <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                <h3 className={`text-lg font-medium ${textPrimary}`}>Clientes Ativos</h3>
-                <button onClick={() => setIsAddUserOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Cliente</button>
+                <h3 className={`text-lg font-medium ${textPrimary}`}>Clientes Ativos ({users.length})</h3>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>Ordenar por:</span>
+                        <select 
+                            value={sortField} 
+                            onChange={(e) => handleSort(e.target.value as SortField)}
+                            className={`bg-transparent border rounded p-1 ${isDarkMode ? 'border-slate-600 text-white' : 'border-slate-300'}`}
+                        >
+                            <option value="expiry">Vencimento</option>
+                            <option value="value">Valor Plano</option>
+                            <option value="status">Status</option>
+                            <option value="name">Nome</option>
+                        </select>
+                        <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="p-1 hover:text-white"><ArrowUpDown size={14} /></button>
+                    </div>
+                    <button onClick={() => setIsAddUserOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Cliente</button>
+                </div>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-400">
                 <thead className={`uppercase text-xs ${isDarkMode ? 'bg-slate-900/50 text-slate-200' : 'bg-slate-50 text-slate-600'}`}>
                 <tr>
-                    <th className="px-6 py-4">Cliente</th>
-                    <th className="px-6 py-4">Assinatura</th>
-                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('name')}>Cliente</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('value')}>Plano</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('expiry')}>Vencimento</th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-white" onClick={() => handleSort('status')}>Status</th>
                     <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
                 </thead>
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700' : 'divide-slate-200'}`}>
-                {users.map(user => (
+                {paginatedUsers.map(user => {
+                    const daysLeft = user.trialEndsAt ? Math.ceil((new Date(user.trialEndsAt).getTime() - Date.now()) / (1000 * 3600 * 24)) : 0;
+                    return (
                     <tr key={user.id} className={`transition-colors ${isDarkMode ? 'hover:bg-slate-700/20' : 'hover:bg-slate-50'}`}>
                         <td className="px-6 py-4">
                             <div className={textPrimary}>{user.name}</div>
                             <div className="text-xs text-slate-500">{user.email}</div>
                         </td>
-                        <td className="px-6 py-4 font-bold text-gold-500">{user.subscription || 'FREE TRIAL'}</td>
+                        <td className="px-6 py-4 font-bold text-gold-500">{user.subscription}</td>
+                        <td className="px-6 py-4">
+                            <span className={`${daysLeft <= 5 ? 'text-red-500 font-bold' : ''}`}>
+                                {new Date(user.trialEndsAt || '').toLocaleDateString()}
+                                {daysLeft <= 5 && <span className="text-[10px] ml-1 bg-red-500/10 px-1 rounded">VENCE LOGO</span>}
+                            </span>
+                        </td>
                         <td className="px-6 py-4">
                              <span className={`px-2 py-1 rounded text-[10px] font-bold ${user.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                                  {user.active ? 'ATIVO' : 'SUSPENSO'}
@@ -157,10 +241,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
                             <button onClick={() => setManageUser(user)} className="text-purple-400 hover:text-purple-300 font-bold">GERENCIAR</button>
                         </td>
                     </tr>
-                ))}
+                )})}
                 </tbody>
             </table>
             </div>
+            {totalPages > 1 && (
+                <div className={`p-4 border-t flex justify-between items-center ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 disabled:opacity-50 hover:text-white"><ChevronLeft /></button>
+                    <span className="text-sm">Página {currentPage} de {totalPages}</span>
+                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-2 disabled:opacity-50 hover:text-white"><ChevronRight /></button>
+                </div>
+            )}
         </div>
     </div>
   );
@@ -248,7 +339,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
       </header>
 
       {activeTab === 'DASHBOARD' && renderDashboard()}
-      {activeTab === 'PLANS' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}> {/* Reusing logic for Plans tab content from App.tsx handling */} <div className="flex justify-between items-center mb-6"><h3 className={`text-lg font-medium ${textPrimary}`}>Gerenciar Planos</h3><button onClick={() => { setCurrentPlan({active: true}); setIsPlanModalOpen(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Plano</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{plans.map(plan => (<div key={plan.id} className={`p-4 rounded border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}><div><div className="flex justify-between items-start mb-2"><h4 className={`font-bold ${textPrimary}`}>{plan.name}</h4><span className={`px-2 py-0.5 text-[10px] rounded uppercase ${plan.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>{plan.active ? 'Ativo' : 'Inativo'}</span></div><p className="text-gold-500 font-bold text-xl mb-1">R$ {plan.price.toFixed(2)} <span className="text-xs text-slate-500 font-normal">/ {plan.type}</span></p><p className="text-xs text-slate-400">{plan.trialDays} dias grátis</p></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700/50"><button onClick={() => { setCurrentPlan(plan); setIsPlanModalOpen(true); }} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded hover:bg-slate-700"><Edit2 size={16} /></button><button onClick={() => { if(confirm('Excluir plano?')) onManagePlan(plan, 'DELETE'); }} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button></div></div>))}</div></div></div>}
+      {activeTab === 'PLANS' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}> <div className="flex justify-between items-center mb-6"><h3 className={`text-lg font-medium ${textPrimary}`}>Gerenciar Planos</h3><button onClick={() => { setCurrentPlan({active: true}); setIsPlanModalOpen(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Plano</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{plans.map(plan => (<div key={plan.id} className={`p-4 rounded border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}><div><div className="flex justify-between items-start mb-2"><h4 className={`font-bold ${textPrimary}`}>{plan.name}</h4><span className={`px-2 py-0.5 text-[10px] rounded uppercase ${plan.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>{plan.active ? 'Ativo' : 'Inativo'}</span></div><p className="text-gold-500 font-bold text-xl mb-1">R$ {plan.price.toFixed(2)} <span className="text-xs text-slate-500 font-normal">/ {plan.type}</span></p><p className="text-xs text-slate-400">{plan.trialDays} dias grátis</p></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700/50"><button onClick={() => { setCurrentPlan(plan); setIsPlanModalOpen(true); }} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded hover:bg-slate-700"><Edit2 size={16} /></button><button onClick={() => handleDeletePlan(plan)} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button></div></div>))}</div></div></div>}
       {activeTab === 'BILLING' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}><h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}><DollarSign className="text-emerald-500" /> Configuração PagSeguro</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs text-slate-400 mb-1">Email da Conta</label><input type="email" value={config.paymentGateway.email} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} /></div><div><label className="block text-xs text-slate-400 mb-1">Token de Acesso</label><input type="password" value={config.paymentGateway.token} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} /></div></div><div className="mt-4 flex items-center gap-2"><input type="checkbox" checked={config.paymentGateway.sandbox} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, sandbox: e.target.checked}})} /><span className={textPrimary}>Modo Sandbox (Testes)</span></div></div></div>}
       {activeTab === 'INTEGRATIONS' && renderIntegrations()}
       {activeTab === 'TUTORIALS' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}><div className="flex justify-between items-center mb-6"><h3 className={`text-lg font-medium ${textPrimary}`}>Vídeos Tutoriais</h3><button onClick={() => setIsTutorialModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Vídeo</button></div><div className="space-y-4">{tutorials.map(tut => (<div key={tut.id} className={`p-4 rounded border flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}><div className="flex items-center gap-4"><PlayCircle size={32} className="text-purple-500" /><div><p className={`font-medium ${textPrimary}`}>{tut.title}</p><p className="text-xs text-slate-500 truncate max-w-md">{tut.videoUrl}</p></div></div><button onClick={() => onManageTutorial(tut, 'DELETE')} className="text-slate-500 hover:text-red-400"><Trash2 size={18} /></button></div>))}</div></div></div>}
@@ -326,7 +417,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
           </div>
       )}
       
-      {/* Plan Modal (User Management Modals omitted for brevity, reusing existing structure from context if needed) */}
+      {/* Plan Modal */}
        {isPlanModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className={`border rounded-xl w-full max-w-md p-6 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>

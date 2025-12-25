@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SubscriptionType, Plan } from '../types';
-import { Mail, Lock, User, Phone, ArrowRight, Bot, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, Phone, ArrowRight, Bot, ShieldCheck, CreditCard } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, pass: string) => void;
@@ -11,17 +11,50 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [subType, setSubType] = useState<SubscriptionType>(SubscriptionType.MONTHLY);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
 
   const cardBg = isDarkMode ? 'bg-slate-900/80' : 'bg-white';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const inputBg = isDarkMode ? 'bg-slate-800' : 'bg-slate-50';
 
   const activePlans = plans.filter(p => p.active);
+
+  const handleRegisterSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const plan = plans.find(p => p.id === selectedPlanId);
+      if (!plan) return;
+
+      if (plan.trialDays === 0) {
+          // Simulate Payment Flow
+          setIsProcessingPayment(true);
+          setTimeout(() => {
+              setIsProcessingPayment(false);
+              onRegister(name, email, phone, plan.type);
+          }, 3000);
+      } else {
+          onRegister(name, email, phone, plan.type);
+      }
+  };
+
+  if (isProcessingPayment) {
+      return (
+          <div className={`min-h-screen flex items-center justify-center p-6 transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
+             <div className={`w-full max-w-md p-8 rounded-2xl border shadow-2xl text-center ${cardBg} ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                 <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto flex items-center justify-center mb-6 animate-pulse">
+                     <CreditCard className="w-8 h-8 text-white" />
+                 </div>
+                 <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Processando Pagamento...</h2>
+                 <p className="text-slate-500">Aguarde enquanto confirmamos sua assinatura junto ao Gateway.</p>
+             </div>
+          </div>
+      );
+  }
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-6 transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
@@ -31,14 +64,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans
                 <Bot className="w-10 h-10 text-slate-900" />
             </div>
             <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>Alfred IA</h1>
-            <p className="text-slate-500 mt-2">{isRegistering ? 'Crie sua conta e comece o teste de 15 dias' : 'Seu mordomo digital lhe aguarda'}</p>
+            <p className="text-slate-500 mt-2">{isRegistering ? 'Crie sua conta para começar' : 'Seu mordomo digital lhe aguarda'}</p>
         </div>
 
-        <form className="space-y-4" onSubmit={(e) => {
-            e.preventDefault();
-            if (isRegistering) onRegister(name, email, phone, subType);
-            else onLogin(email, password);
-        }}>
+        <form className="space-y-4" onSubmit={isRegistering ? handleRegisterSubmit : (e) => { e.preventDefault(); onLogin(email, password); }}>
           {isRegistering && (
             <>
               <div className="relative">
@@ -51,14 +80,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans
               </div>
               <div>
                   <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Selecione o Plano</label>
-                  <div className="grid grid-cols-1 gap-2">
+                  <select 
+                    required 
+                    value={selectedPlanId} 
+                    onChange={e => setSelectedPlanId(e.target.value)}
+                    className={`w-full p-3 rounded-lg border focus:outline-none focus:border-gold-500 ${inputBg} ${isDarkMode ? 'border-slate-700 text-white' : 'border-slate-200 text-slate-900'}`}
+                  >
+                      <option value="" disabled>Escolha uma opção...</option>
                       {activePlans.map(plan => (
-                          <button key={plan.id} type="button" onClick={() => setSubType(plan.type)} className={`p-3 rounded-lg border text-left flex justify-between items-center ${subType === plan.type ? 'border-gold-500 bg-gold-500/10' : 'border-slate-700'}`}>
-                            <span className={textPrimary}>{plan.name}</span>
-                            <span className="text-gold-500 font-bold">R$ {plan.price.toFixed(2)}</span>
-                          </button>
+                          <option key={plan.id} value={plan.id}>
+                              {plan.name} - R$ {plan.price.toFixed(2)} ({plan.type}) - {plan.trialDays > 0 ? `${plan.trialDays} dias grátis` : 'Sem teste grátis'}
+                          </option>
                       ))}
-                  </div>
+                  </select>
               </div>
             </>
           )}
@@ -74,7 +108,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans
           </div>
 
           <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-slate-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
-            {isRegistering ? 'Iniciar Teste Grátis' : 'Entrar na Propriedade'}
+            {isRegistering ? (selectedPlanId && plans.find(p => p.id === selectedPlanId)?.trialDays === 0 ? 'Pagar e Criar Conta' : 'Criar Conta') : 'Entrar na Propriedade'}
             <ArrowRight size={18} />
           </button>
         </form>

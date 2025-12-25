@@ -24,7 +24,10 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check, CreditCard } from 'lucide-react';
+
+// Alfred Butler Icon (SVG Base64 for consistency)
+export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
 const App = () => {
   // --- Auth State ---
@@ -106,6 +109,17 @@ const App = () => {
   }, [isAuthenticated, currentUser, announcements]);
 
 
+  // --- Helper: Days Remaining ---
+  const getDaysRemaining = () => {
+      if (!currentUser?.trialEndsAt) return 999;
+      const end = new Date(currentUser.trialEndsAt);
+      const now = new Date();
+      const diff = end.getTime() - now.getTime();
+      return Math.ceil(diff / (1000 * 3600 * 24)); 
+  };
+  const daysRemaining = getDaysRemaining();
+
+
   // --- Handlers ---
   const handleLogin = (email: string, pass: string) => {
     if (email === 'maisalem.md@gmail.com' && pass === 'Alfred@1992') {
@@ -126,6 +140,8 @@ const App = () => {
   const handleRegister = (name: string, email: string, phone: string, subscription: SubscriptionType) => {
     const selectedPlan = plans.find(p => p.type === subscription);
     const trialDays = selectedPlan ? selectedPlan.trialDays : 15;
+    
+    // Logic handles in Login Page for Payment if trial is 0, here we just create
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -133,6 +149,7 @@ const App = () => {
       phone,
       role: UserRole.USER,
       subscription,
+      planId: selectedPlan?.id,
       trialEndsAt: new Date(Date.now() + trialDays * 86400000).toISOString(),
       active: true,
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS],
@@ -162,7 +179,10 @@ const App = () => {
   const handleManagePlan = (plan: Plan, action: 'CREATE' | 'UPDATE' | 'DELETE') => {
       if (action === 'CREATE') setPlans(prev => [...prev, plan]);
       if (action === 'UPDATE') setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
-      if (action === 'DELETE') setPlans(prev => prev.filter(p => p.id !== plan.id));
+      if (action === 'DELETE') {
+          // Explicitly filter out the ID
+          setPlans(prev => prev.filter(p => p.id !== plan.id));
+      }
   };
 
   const handleManageTutorial = (tut: Tutorial, action: 'CREATE' | 'DELETE') => {
@@ -287,6 +307,18 @@ const App = () => {
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         <header className={`h-16 border-b flex items-center justify-end px-8 gap-4 ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white/50 border-slate-200'}`}>
+            
+            {/* PAYMENT ALERT BUTTON */}
+            {daysRemaining <= 5 && (
+                <button 
+                  onClick={() => setActiveModule(ModuleType.PROFILE)} 
+                  className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-full text-sm font-bold animate-pulse flex items-center gap-2 shadow-lg shadow-red-900/20"
+                >
+                    <CreditCard size={16} />
+                    Renovar Assinatura
+                </button>
+            )}
+
             {/* Informatics Dropdown */}
             <div className="relative">
                 <button onClick={() => setShowInformatics(!showInformatics)} className={`p-2 rounded-full relative ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}>
@@ -364,13 +396,13 @@ const App = () => {
                     onManageTutorial={handleManageTutorial} onAddAnnouncement={handleAddAnnouncement}
                 />
             )}
-            {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
+            {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} plans={plans} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
           </div>
         </div>
 
         {!isChatOpen && (
-            <button onClick={() => setIsChatOpen(true)} className="absolute bottom-8 right-8 w-16 h-16 bg-slate-900 border-2 border-gold-600 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform z-30 group">
-                <UserIcon className="w-8 h-8 text-gold-500 group-hover:animate-bounce" />
+            <button onClick={() => setIsChatOpen(true)} className="absolute bottom-8 right-8 w-20 h-20 bg-slate-900 border-2 border-gold-600 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform z-30 group overflow-hidden">
+                <img src={ALFRED_ICON_URL} alt="Alfred" className="w-full h-full object-cover" />
             </button>
         )}
         <AlfredChat appContext={{ transactions, tasks, lists }} onAIAction={handleAIAction} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToAlfred } from '../services/geminiService';
 import { Mic, Send, Paperclip, Loader2, User as UserIcon } from 'lucide-react';
+import { ALFRED_ICON_URL } from '../App';
 
 interface AlfredChatProps {
   appContext: any;
@@ -86,8 +87,8 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       {/* Header */}
       <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/95 backdrop-blur">
         <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-gold-600/50 shadow-lg shadow-gold-900/20">
-                <UserIcon className="w-6 h-6 text-gold-500" />
+            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-gold-600/50 shadow-lg shadow-gold-900/20 overflow-hidden">
+                <img src={ALFRED_ICON_URL} alt="Alfred" className="w-full h-full object-cover" />
             </div>
             <div>
                 <h3 className="font-serif text-white font-medium">Alfred</h3>
