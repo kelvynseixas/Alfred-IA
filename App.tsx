@@ -10,7 +10,8 @@ import {
   User,
   UserRole,
   SubscriptionType,
-  Notification
+  Notification,
+  AIActionType
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
 import { TaskModule } from './components/TaskModule';
@@ -54,21 +55,37 @@ const App = () => {
             setLists(data.lists || []);
             if(data.users) setUsers(data.users);
             
+            // Se o usuário logado não estiver no state ainda (ex: refresh), tentar recuperar ou usar o retornado
+            if (!currentUser && localStorage.getItem('alfred_user_data')) {
+                 setCurrentUser(JSON.parse(localStorage.getItem('alfred_user_data')!));
+            }
+
             if (data.config?.aiKeys?.gemini) {
                 sessionStorage.setItem('VITE_GEMINI_KEY', data.config.aiKeys.gemini);
             }
+        } else if (res.status === 401 || res.status === 403) {
+            handleLogout();
         }
-    } catch (e) { console.error("Erro ao carregar dados", e); }
+    } catch (e) { 
+        console.error("Erro ao carregar dados", e);
+        handleLogout();
+    }
   };
 
   // --- Handlers Financeiro ---
   const handleAddTransaction = async (t: Omit<Transaction, 'id'>) => {
-    const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-        body: JSON.stringify(t)
-    });
-    if (res.ok) fetchDashboardData();
+    try {
+        const res = await fetch('/api/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
+            body: JSON.stringify(t)
+        });
+        if (res.ok) {
+            await fetchDashboardData();
+            return true;
+        }
+    } catch (e) { console.error(e); }
+    return false;
   };
 
   const handleDeleteTransaction = async (id: string) => {
@@ -81,12 +98,18 @@ const App = () => {
 
   // --- Handlers Tarefas ---
   const handleAddTask = async (t: Omit<Task, 'id'>) => {
-    const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-        body: JSON.stringify(t)
-    });
-    if (res.ok) fetchDashboardData();
+    try {
+        const res = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
+            body: JSON.stringify(t)
+        });
+        if (res.ok) {
+            await fetchDashboardData();
+            return true;
+        }
+    } catch (e) { console.error(e); }
+    return false;
   };
 
   const handleToggleTask = async (id: string) => {
@@ -112,9 +135,6 @@ const App = () => {
   };
 
   const handleAddItem = async (listId: string, name: string) => {
-      // Logic inside ListModule component calls fetch but we can handle global state here if refactored
-      // For now ListModule can just call reload or we assume local update.
-      // Better: ListModule triggers reload.
       fetchDashboardData();
   };
 
@@ -140,17 +160,48 @@ const App = () => {
       fetchDashboardData();
   };
 
+  // --- IA ACTION HANDLER ---
+  const handleAIAction = async (action: { type: AIActionType, payload: any }) => {
+      console.log("Executando ação da IA:", action);
+      
+      if (action.type === 'ADD_TRANSACTION') {
+          // Payload esperado: { description, amount, type, category, date? }
+          await handleAddTransaction({
+              description: action.payload.description || 'Transação via Alfred',
+              amount: Number(action.payload.amount),
+              type: action.payload.type || TransactionType.EXPENSE,
+              category: action.payload.category || 'Geral',
+              date: action.payload.date || new Date().toISOString()
+          });
+      } 
+      else if (action.type === 'ADD_TASK') {
+          // Payload esperado: { title, date, time?, priority? }
+          await handleAddTask({
+              title: action.payload.title,
+              date: action.payload.date, // Formato YYYY-MM-DD
+              time: action.payload.time || '',
+              priority: action.payload.priority || 'medium',
+              status: TaskStatus.PENDING
+          });
+      }
+      // Expandir para listas se necessário
+  };
+
   // --- Handlers User ---
   const handleUpdateUser = async (u: User) => {
-      const res = await fetch('/api/users/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-          body: JSON.stringify(u)
-      });
-      if (res.ok) {
-          setCurrentUser(u);
-          alert('Perfil atualizado com sucesso.');
-      }
+      try {
+        const res = await fetch('/api/users/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
+            body: JSON.stringify(u)
+        });
+        if (res.ok) {
+            setCurrentUser(u);
+            localStorage.setItem('alfred_user_data', JSON.stringify(u));
+            return true;
+        }
+      } catch (e) { console.error(e); }
+      return false;
   };
 
   const handleLogin = async (email: string, pass: string) => {
@@ -163,6 +214,7 @@ const App = () => {
         const data = await res.json();
         if (res.ok) {
             localStorage.setItem('alfred_token', data.token);
+            localStorage.setItem('alfred_user_data', JSON.stringify(data.user));
             setCurrentUser(data.user);
             setIsAuthenticated(true);
         } else alert(data.error);
@@ -171,11 +223,15 @@ const App = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('alfred_token');
+    localStorage.removeItem('alfred_user_data');
     setIsAuthenticated(false);
     setCurrentUser(null);
   };
 
-  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} onRegister={() => {}} plans={[]} isDarkMode={isDarkMode} />;
+  // Se não estiver autenticado, mostrar Login
+  if (!isAuthenticated) {
+      return <LoginPage onLogin={handleLogin} onRegister={() => {}} plans={[]} isDarkMode={isDarkMode} />;
+  }
 
   const btnClass = (mod: ModuleType) => `w-full text-left p-3 rounded-lg flex gap-3 transition-colors ${activeModule === mod ? 'bg-slate-800 text-gold-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`;
 
@@ -202,7 +258,18 @@ const App = () => {
             )}
           </nav>
         </div>
-        <button onClick={handleLogout} className="flex gap-3 p-3 text-slate-500 hover:text-red-400 transition-colors"><LogOut size={20}/> Sair</button>
+        <div className="border-t border-slate-800 pt-4">
+             <div className="flex items-center gap-3 px-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-gold-600 flex items-center justify-center text-slate-900 font-bold">
+                    {currentUser?.name?.charAt(0) || 'U'}
+                </div>
+                <div className="overflow-hidden">
+                    <p className="text-sm font-medium text-white truncate">{currentUser?.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{currentUser?.email}</p>
+                </div>
+             </div>
+             <button onClick={handleLogout} className="w-full flex gap-3 p-3 text-slate-500 hover:text-red-400 transition-colors"><LogOut size={20}/> Sair</button>
+        </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
@@ -211,12 +278,17 @@ const App = () => {
         {activeModule === ModuleType.LISTS && <ListModule lists={lists} onAddList={handleAddList} onToggleItem={handleToggleItem} onDeleteItem={handleDeleteItem} onAddItem={handleAddItem} />}
         {activeModule === ModuleType.TUTORIALS && <TutorialModule tutorials={[]} isDarkMode={isDarkMode} />}
         {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
-        {activeModule === ModuleType.ADMIN && <AdminPanel users={users} plans={[]} tutorials={[]} isDarkMode={isDarkMode} onUpdateUser={() => {}} onAddUser={() => {}} onManagePlan={() => {}} onManageTutorial={() => {}} onAddAnnouncement={() => {}} />}
+        {activeModule === ModuleType.ADMIN && currentUser?.role === 'ADMIN' && <AdminPanel users={users} plans={[]} tutorials={[]} isDarkMode={isDarkMode} onUpdateUser={() => {}} onAddUser={() => {}} onManagePlan={() => {}} onManageTutorial={() => {}} onAddAnnouncement={() => {}} />}
         
         <button onClick={() => setIsChatOpen(true)} className="fixed bottom-8 right-8 w-14 h-14 bg-gold-600 hover:bg-gold-500 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-transform z-50">
           <Bot className="text-slate-900 w-8 h-8" />
         </button>
-        <AlfredChat appContext={{ transactions, tasks, lists }} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onAIAction={() => {}} />
+        <AlfredChat 
+            appContext={{ transactions, tasks, lists }} 
+            isOpen={isChatOpen} 
+            onClose={() => setIsChatOpen(false)} 
+            onAIAction={handleAIAction} 
+        />
       </main>
     </div>
   );

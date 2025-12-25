@@ -1,19 +1,95 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Plan, PaymentHistory, SubscriptionType } from '../types';
-import { User as UserIcon, Lock, Eye, EyeOff, Camera, FileText, CreditCard, X, QrCode, Barcode, CheckCircle, Loader2 } from 'lucide-react';
+import { User as UserIcon, Lock, Eye, EyeOff, Camera, FileText, CreditCard, X, QrCode, Barcode, CheckCircle, Loader2, Save, AlertCircle } from 'lucide-react';
 
 interface UserProfileProps {
   user: User;
   plans?: Plan[];
   isDarkMode: boolean;
-  onUpdateUser: (u: User) => void;
+  onUpdateUser: (u: User) => Promise<boolean>;
 }
+
+const COUNTRIES = [
+    { code: '+55', country: 'BR', flag: '🇧🇷' },
+    { code: '+1', country: 'US', flag: '🇺🇸' },
+    { code: '+351', country: 'PT', flag: '🇵🇹' },
+];
 
 export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMode, onUpdateUser }) => {
   const [showPass, setShowPass] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'SELECT' | 'PROCESSING' | 'SUCCESS'>('SELECT');
   const [selectedMethod, setSelectedMethod] = useState<'PIX' | 'CREDIT_CARD' | 'BOLETO' | null>(null);
+  
+  // Edit States
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [ddi, setDdi] = useState('+55');
+  const [phone, setPhone] = useState('');
+  
+  // Save Feedback States
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+
+  useEffect(() => {
+      // Parse initial phone if possible
+      if (user.phone) {
+          // Simple logic: if starts with +, try to split. Default to BR if plain number
+          if (user.phone.startsWith('+')) {
+             const match = COUNTRIES.find(c => user.phone.startsWith(c.code));
+             if (match) {
+                 setDdi(match.code);
+                 setPhone(user.phone.replace(match.code, '').trim());
+             } else {
+                 setPhone(user.phone);
+             }
+          } else {
+              setPhone(user.phone);
+          }
+      }
+  }, [user.phone]);
+
+  const formatPhone = (val: string) => {
+      // Remove non digits
+      const v = val.replace(/\D/g, '');
+      // Format (XX) XXXXX-XXXX
+      if (v.length > 10) {
+          return v.replace(/^(\d\d)(\d{5})(\d{4}).*/, '($1) $2-$3');
+      } else if (v.length > 6) {
+          return v.replace(/^(\d\d)(\d{4})(\d{0,4}).*/, '($1) $2-$3');
+      } else if (v.length > 2) {
+          return v.replace(/^(\d\d)(\d{0,5}).*/, '($1) $2');
+      } else {
+          return v;
+      }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPhone(formatPhone(e.target.value));
+  };
+
+  const handleSaveProfile = async () => {
+      setIsSaving(true);
+      setSaveStatus('IDLE');
+      
+      const fullPhone = `${ddi} ${phone}`;
+      
+      const success = await onUpdateUser({
+          ...user,
+          name,
+          email,
+          phone: fullPhone
+      });
+
+      if (success) {
+          setSaveStatus('SUCCESS');
+          setTimeout(() => setSaveStatus('IDLE'), 3000);
+      } else {
+          setSaveStatus('ERROR');
+          setTimeout(() => setSaveStatus('IDLE'), 3000);
+      }
+      setIsSaving(false);
+  };
   
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -31,7 +107,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
   };
   const daysRemaining = getDaysRemaining();
   
-  // Resolve Plan Name
   const currentPlan = plans?.find(p => p.id === user.planId) || plans?.find(p => p.type === user.subscription);
 
   const cardClass = isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm';
@@ -39,42 +114,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
 
   const handleProcessPayment = () => {
-      if (!selectedMethod || !currentPlan) return;
-
+      if (!selectedMethod) return; // Plan can be undefined in demo
       setPaymentStep('PROCESSING');
-
       setTimeout(() => {
-          // Logic to extend subscription
-          const now = new Date();
-          const currentEnd = new Date(user.trialEndsAt || now);
-          // If expired, start counting from NOW, otherwise extend current date
-          const baseDate = currentEnd < now ? now : currentEnd;
-
-          let daysToAdd = 30;
-          if (user.subscription === SubscriptionType.QUARTERLY) daysToAdd = 90;
-          if (user.subscription === SubscriptionType.SEMIANNUAL) daysToAdd = 180;
-          if (user.subscription === SubscriptionType.ANNUAL) daysToAdd = 365;
-
-          const newEnd = new Date(baseDate.getTime() + (daysToAdd * 86400000));
-
-          const newHistoryItem: PaymentHistory = {
-              id: Date.now().toString(),
-              date: now.toISOString(),
-              amount: currentPlan.price,
-              method: selectedMethod,
-              status: 'PAID'
-          };
-
-          const updatedUser: User = {
-              ...user,
-              active: true, // Reactivate if suspended
-              trialEndsAt: newEnd.toISOString(),
-              paymentHistory: [newHistoryItem, ...(user.paymentHistory || [])]
-          };
-
-          onUpdateUser(updatedUser);
+          onUpdateUser({
+               ...user,
+               active: true,
+               trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          });
           setPaymentStep('SUCCESS');
-      }, 3000); // Simulate 3s processing
+      }, 2000);
   };
 
   const closePaymentModal = () => {
@@ -152,21 +201,56 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
                 <div className="grid grid-cols-1 gap-6">
                     <div>
                         <label className="block text-xs text-slate-400 mb-1">Nome Completo</label>
-                        <input type="text" defaultValue={user.name} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Email</label>
-                            <input type="email" defaultValue={user.email} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-400 mb-1">Telefone</label>
-                            <input type="tel" defaultValue={user.phone} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                            <label className="block text-xs text-slate-400 mb-1">Telefone (WhatsApp)</label>
+                            <div className="flex gap-2">
+                                <select 
+                                    value={ddi} 
+                                    onChange={e => setDdi(e.target.value)}
+                                    className={`w-24 border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`}
+                                >
+                                    {COUNTRIES.map(c => (
+                                        <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
+                                    ))}
+                                </select>
+                                <input 
+                                    type="tel" 
+                                    value={phone} 
+                                    onChange={handlePhoneChange} 
+                                    placeholder="(27) 99999-9999"
+                                    maxLength={15}
+                                    className={`flex-1 border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} 
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end">
-                    <button className="bg-gold-600 hover:bg-gold-500 text-slate-900 px-6 py-2 rounded font-bold transition-colors">Salvar Alterações</button>
+                    <button 
+                        onClick={handleSaveProfile}
+                        disabled={isSaving}
+                        className={`px-6 py-2 rounded font-bold transition-all flex items-center gap-2 
+                        ${saveStatus === 'SUCCESS' ? 'bg-emerald-600 text-white' : 
+                          saveStatus === 'ERROR' ? 'bg-red-600 text-white' : 
+                          'bg-gold-600 hover:bg-gold-500 text-slate-900'}`}
+                    >
+                        {isSaving ? <Loader2 className="animate-spin" size={18} /> : 
+                         saveStatus === 'SUCCESS' ? <CheckCircle size={18} /> : 
+                         saveStatus === 'ERROR' ? <AlertCircle size={18} /> : 
+                         <Save size={18} />}
+                        
+                        {isSaving ? 'Salvando...' : 
+                         saveStatus === 'SUCCESS' ? 'Salvo com Sucesso!' : 
+                         saveStatus === 'ERROR' ? 'Erro ao Salvar' : 
+                         'Salvar Alterações'}
+                    </button>
                 </div>
             </div>
 
@@ -220,7 +304,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
       </div>
 
       {/* PAYMENT MODAL */}
-      {isPaymentModalOpen && currentPlan && (
+      {isPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
               <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl w-full max-w-md p-0 shadow-2xl overflow-hidden`}>
                   
@@ -236,10 +320,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
                   {paymentStep === 'SELECT' && (
                       <div className="p-6">
                           <div className="text-center mb-6">
-                              <p className="text-slate-400 text-sm mb-1">Plano Selecionado</p>
-                              <p className={`text-2xl font-bold ${textPrimary}`}>{currentPlan.name}</p>
-                              <p className="text-gold-500 font-bold text-3xl mt-2">R$ {currentPlan.price.toFixed(2)}</p>
-                              <p className="text-xs text-slate-500">Ciclo {user.subscription}</p>
+                              <p className="text-slate-400 text-sm mb-1">Plano Atual</p>
+                              <p className={`text-2xl font-bold ${textPrimary}`}>{user.subscription}</p>
+                              <p className="text-xs text-slate-500">Renovação Manual</p>
                           </div>
 
                           <div className="space-y-3">
