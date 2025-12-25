@@ -6,6 +6,7 @@ import { DollarSign, TrendingUp, TrendingDown, Plus, X, List, Trash2, Edit2, Tag
 interface FinancialModuleProps {
   transactions: Transaction[];
   onAddTransaction: (t: Omit<Transaction, 'id'>) => void;
+  onEditTransaction: (id: string, updates: Partial<Transaction>) => void;
   onDeleteTransaction: (id: string) => void;
   isDarkMode: boolean;
 }
@@ -14,8 +15,9 @@ const COLORS_EXPENSE = ['#ef4444', '#f87171', '#b91c1c', '#991b1b', '#fca5a5'];
 const COLORS_INCOME = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
 const COLORS_INVEST = ['#f59e0b', '#fbbf24', '#d97706', '#b45309', '#fcd34d'];
 
-export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, onAddTransaction, onDeleteTransaction, isDarkMode }) => {
+export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, onAddTransaction, onEditTransaction, onDeleteTransaction, isDarkMode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [newTrans, setNewTrans] = useState<{description: string, amount: string, type: TransactionType, category: string, recurrencePeriod: RecurrencePeriod, recurrenceInterval: number, recurrenceLimit: string }>({ 
       description: '', amount: '', type: TransactionType.EXPENSE, category: '', recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: ''
   });
@@ -63,24 +65,46 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   const investChartData = getCategoryData(TransactionType.INVESTMENT);
 
   const openModal = (type: TransactionType) => {
-      setNewTrans(prev => ({ ...prev, type }));
+      setEditingTransaction(null);
+      setNewTrans({ description: '', amount: '', type, category: '', recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: '' });
+      setIsModalOpen(true);
+  };
+
+  const openEditModal = (t: Transaction) => {
+      setEditingTransaction(t);
+      setNewTrans({
+          description: t.description,
+          amount: t.amount.toString(),
+          type: t.type,
+          category: t.category,
+          recurrencePeriod: t.recurrencePeriod || 'NONE',
+          recurrenceInterval: t.recurrenceInterval || 1,
+          recurrenceLimit: t.recurrenceLimit ? t.recurrenceLimit.toString() : ''
+      });
       setIsModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTrans.description || !newTrans.amount) return;
-    onAddTransaction({
+
+    const transactionData: any = {
       description: newTrans.description,
       amount: parseFloat(newTrans.amount),
       type: newTrans.type,
       category: newTrans.category || 'Geral',
-      date: new Date().toISOString(),
+      date: editingTransaction ? editingTransaction.date : new Date().toISOString(), // Keep original date if editing
       recurrencePeriod: newTrans.recurrencePeriod,
       recurrenceInterval: newTrans.recurrenceInterval,
       recurrenceLimit: newTrans.recurrenceLimit ? parseInt(newTrans.recurrenceLimit) : 0
-    });
-    setNewTrans({ description: '', amount: '', type: TransactionType.EXPENSE, category: '', recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: '' });
+    };
+
+    if (editingTransaction) {
+        onEditTransaction(editingTransaction.id, transactionData);
+    } else {
+        onAddTransaction(transactionData);
+    }
+
     setIsModalOpen(false);
   };
 
@@ -116,7 +140,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
         </div>
       </header>
       
-      {/* ACTION BUTTONS */}
+      {/* QUICK ACTIONS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <button 
             onClick={() => openModal(TransactionType.INCOME)}
@@ -138,89 +162,118 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
           </button>
       </div>
 
-      {/* 4 CHARTS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Chart 1: Overview */}
-          <div className={`p-4 rounded-xl border ${cardBg}`}>
-              <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Visão Geral</h3>
-              <div className="h-64">
+      {/* OVERVIEW BAR CHART */}
+      <div className={`p-6 rounded-xl border mb-6 ${cardBg}`}>
+           <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Visão Geral (Comparativo)</h3>
+           <div className="h-48 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overviewChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="name" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" />
+                    <BarChart data={overviewChartData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                        <XAxis type="number" stroke="#94a3b8" />
+                        <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} />
                         <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
+                           {overviewChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                           ))}
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
-              </div>
-          </div>
+           </div>
+      </div>
+
+      {/* 3 DETAILED CARDS (INCOME, EXPENSE, INVESTMENT) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           
-          {/* Chart 2: Income */}
-          <div className={`p-4 rounded-xl border ${cardBg}`}>
-              <div className="flex justify-between items-center mb-4">
+          {/* INCOME CARD */}
+          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+              <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Entradas</h3>
-                  <button onClick={() => setDetailsView(TransactionType.INCOME)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+                  <ArrowUpCircle size={20} className="text-emerald-500" />
               </div>
-              <div className="h-64">
+              <p className="text-2xl font-serif font-bold text-emerald-400 mb-4">
+                  R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <div className="h-40 mb-4 flex-1">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                          <Pie data={incomeChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                          <Pie data={incomeChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
                               {incomeChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INCOME[index % COLORS_INCOME.length]} />))}
                           </Pie>
                           <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                          <Legend />
                       </PieChart>
                   </ResponsiveContainer>
               </div>
+              <button 
+                  onClick={() => setDetailsView(TransactionType.INCOME)}
+                  className="w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500 hover:text-white transition-colors flex items-center justify-center gap-2"
+              >
+                  <List size={16} /> Ver Detalhes
+              </button>
           </div>
 
-          {/* Chart 3: Expense */}
-          <div className={`p-4 rounded-xl border ${cardBg}`}>
-               <div className="flex justify-between items-center mb-4">
+          {/* EXPENSE CARD */}
+          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+              <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Saídas</h3>
-                  <button onClick={() => setDetailsView(TransactionType.EXPENSE)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+                  <ArrowDownCircle size={20} className="text-red-500" />
               </div>
-              <div className="h-64">
+              <p className="text-2xl font-serif font-bold text-red-400 mb-4">
+                  R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <div className="h-40 mb-4 flex-1">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                          <Pie data={expenseChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                          <Pie data={expenseChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
                               {expenseChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_EXPENSE[index % COLORS_EXPENSE.length]} />))}
                           </Pie>
                           <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                          <Legend />
                       </PieChart>
                   </ResponsiveContainer>
               </div>
+              <button 
+                  onClick={() => setDetailsView(TransactionType.EXPENSE)}
+                  className="w-full py-2 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
+              >
+                  <List size={16} /> Ver Detalhes
+              </button>
           </div>
 
-           {/* Chart 4: Investment */}
-           <div className={`p-4 rounded-xl border ${cardBg}`}>
-               <div className="flex justify-between items-center mb-4">
+          {/* INVESTMENT CARD */}
+          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+              <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Investimentos</h3>
-                  <button onClick={() => setDetailsView(TransactionType.INVESTMENT)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+                  <Target size={20} className="text-gold-500" />
               </div>
-              <div className="h-64">
+              <p className="text-2xl font-serif font-bold text-gold-400 mb-4">
+                  R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <div className="h-40 mb-4 flex-1">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                          <Pie data={investChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                          <Pie data={investChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
                               {investChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INVEST[index % COLORS_INVEST.length]} />))}
                           </Pie>
                           <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                          <Legend />
                       </PieChart>
                   </ResponsiveContainer>
               </div>
+              <button 
+                  onClick={() => setDetailsView(TransactionType.INVESTMENT)}
+                  className="w-full py-2 rounded-lg bg-gold-500/10 text-gold-400 font-bold hover:bg-gold-500 hover:text-white transition-colors flex items-center justify-center gap-2"
+              >
+                  <List size={16} /> Ver Detalhes
+              </button>
           </div>
       </div>
 
-      {/* Manual Entry Modal */}
+      {/* Manual Entry/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl w-full max-w-md p-6 shadow-2xl overflow-y-auto max-h-[90vh]`}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className={`text-xl font-serif ${textPrimary}`}>
-                        {newTrans.type === 'INCOME' ? 'Nova Entrada' : newTrans.type === 'EXPENSE' ? 'Nova Saída' : 'Novo Investimento'}
+                        {editingTransaction ? 'Editar Transação' : (newTrans.type === 'INCOME' ? 'Nova Entrada' : newTrans.type === 'EXPENSE' ? 'Nova Saída' : 'Novo Investimento')}
                     </h3>
                     <button onClick={() => setIsModalOpen(false)}><X className="text-slate-400 hover:text-red-500" /></button>
                 </div>
@@ -285,7 +338,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                          newTrans.type === 'EXPENSE' ? 'bg-red-600 hover:bg-red-500' :
                          'bg-gold-600 hover:bg-gold-500'
                     }`}>
-                        Confirmar Lançamento
+                        {editingTransaction ? 'Salvar Alterações' : 'Confirmar Lançamento'}
                     </button>
                 </form>
             </div>
@@ -328,7 +381,8 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                                         <td className={`px-4 py-3 text-right font-bold ${detailsView === TransactionType.INCOME ? 'text-emerald-400' : detailsView === TransactionType.EXPENSE ? 'text-red-400' : 'text-gold-400'}`}>
                                             R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-4 py-3 text-center">
+                                        <td className="px-4 py-3 text-center flex justify-center gap-2">
+                                            <button onClick={() => openEditModal(t)} className="p-1 hover:bg-blue-500/10 rounded text-slate-500 hover:text-blue-400 transition-colors" title="Editar"><Edit2 size={16} /></button>
                                             <button onClick={() => onDeleteTransaction(t.id)} className="p-1 hover:bg-red-500/10 rounded text-slate-500 hover:text-red-400 transition-colors" title="Excluir"><Trash2 size={16} /></button>
                                         </td>
                                     </tr>

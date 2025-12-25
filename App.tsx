@@ -90,6 +90,11 @@ const App = () => {
       fetchDashboardData();
   };
 
+  const handleEditTransaction = async (id: string, updates: Partial<Transaction>) => {
+      await fetch(`/api/transactions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(updates) });
+      fetchDashboardData();
+  };
+
   const handleUpdateUser = async (u: User) => {
       try {
         const res = await fetch('/api/users/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(u) });
@@ -188,7 +193,7 @@ const App = () => {
             </div>
         </div>
 
-        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={async (t) => { await fetch('/api/transactions', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTransaction={async (id) => { await fetch(`/api/transactions/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} isDarkMode={isDarkMode} />}
+        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={async (t) => { await fetch('/api/transactions', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onEditTransaction={handleEditTransaction} onDeleteTransaction={async (id) => { await fetch(`/api/transactions/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} isDarkMode={isDarkMode} />}
         
         {activeModule === ModuleType.PROJECTS && <FinancialProjectsModule projects={projects} isDarkMode={isDarkMode} onAddProject={async (p) => { await fetch('/api/projects', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(p)}); fetchDashboardData(); }} onUpdateProject={async (id, u) => { await fetch(`/api/projects/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(u)}); fetchDashboardData(); }} onDeleteProject={async (id) => { await fetch(`/api/projects/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} />}
         

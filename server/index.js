@@ -177,6 +177,18 @@ app.post('/api/transactions', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.patch('/api/transactions/:id', authenticateToken, async (req, res) => {
+    const updates = req.body;
+    const fields = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const values = Object.values(updates);
+    try { 
+        if (fields.length > 0) {
+            await pool.query(`UPDATE transactions SET ${fields} WHERE id = $${values.length + 1} AND user_id = $${values.length + 2}`, [...values, req.params.id, req.user.id]); 
+        }
+        res.json({success:true}); 
+    } catch (e) { res.sendStatus(500); }
+});
+
 app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
     try { await pool.query('DELETE FROM transactions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]); res.json({success:true}); } catch (e) { res.sendStatus(500); }
 });
