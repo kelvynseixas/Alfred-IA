@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   ModuleType, 
   Transaction, 
-  TransactionType, 
   Task, 
   TaskStatus, 
   ListGroup, 
-  ItemStatus,
   User,
-  AIActionType
+  AIActionType,
+  FinancialProject
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
+import { FinancialProjectsModule } from './components/FinancialProjectsModule'; // Novo
 import { TaskModule } from './components/TaskModule';
 import { ListModule } from './components/ListModule';
 import { AdminPanel } from './components/AdminPanel';
@@ -18,7 +18,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target } from 'lucide-react';
 
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
@@ -32,6 +32,7 @@ const App = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lists, setLists] = useState<ListGroup[]>([]);
+  const [projects, setProjects] = useState<FinancialProject[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -62,6 +63,7 @@ const App = () => {
             setTransactions(data.transactions || []);
             setTasks(data.tasks || []);
             setLists(data.lists || []);
+            setProjects(data.projects || []);
             if(data.users) setUsers(data.users);
             if(data.plans) setPlans(data.plans);
             if(data.coupons) setCoupons(data.coupons);
@@ -82,94 +84,46 @@ const App = () => {
     }
   };
 
+  // --- Handlers ---
   const handleEditTask = async (id: string, updates: Partial<Task>) => {
-      await fetch(`/api/tasks/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-          body: JSON.stringify(updates)
-      });
+      await fetch(`/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(updates) });
       fetchDashboardData();
   };
 
-  // --- IA ACTION HANDLER ---
-  const handleAIAction = async (action: { type: AIActionType, payload: any }) => {
-      console.log("Executando ação da IA:", action);
-      
-      if (action.type === 'ADD_TRANSACTION') {
-          await fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-            body: JSON.stringify(action.payload)
-          });
-          fetchDashboardData();
-      } 
-      else if (action.type === 'ADD_TASK') {
-          await fetch('/api/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-            body: JSON.stringify({...action.payload, status: TaskStatus.PENDING})
-          });
-          fetchDashboardData();
-      }
-      else if (action.type === 'UPDATE_TASK') {
-          // Payload: { id: string, updates: {} }
-          if (action.payload.id && action.payload.updates) {
-              await handleEditTask(action.payload.id, action.payload.updates);
-          }
-      }
-  };
-
-  // --- Handlers User ---
   const handleUpdateUser = async (u: User) => {
       try {
-        const res = await fetch('/api/users/profile', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-            body: JSON.stringify(u)
-        });
-        if (res.ok) {
-            setCurrentUser(u);
-            localStorage.setItem('alfred_user_data', JSON.stringify(u));
-            return true;
-        }
+        const res = await fetch('/api/users/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(u) });
+        if (res.ok) { setCurrentUser(u); localStorage.setItem('alfred_user_data', JSON.stringify(u)); return true; }
       } catch (e) { console.error(e); }
       return false;
   };
 
   const handleLogin = async (email: string, pass: string) => {
     try {
-        const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass })
-        });
+        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass }) });
         const data = await res.json();
-        if (res.ok) {
-            localStorage.setItem('alfred_token', data.token);
-            localStorage.setItem('alfred_user_data', JSON.stringify(data.user));
-            setCurrentUser(data.user);
-            setIsAuthenticated(true);
-        } else alert(data.error);
+        if (res.ok) { localStorage.setItem('alfred_token', data.token); localStorage.setItem('alfred_user_data', JSON.stringify(data.user)); setCurrentUser(data.user); setIsAuthenticated(true); } else alert(data.error);
     } catch(e) { alert("Erro de conexão"); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('alfred_token');
-    localStorage.removeItem('alfred_user_data');
-    setIsAuthenticated(false);
-    setCurrentUser(null);
+  const handleLogout = () => { localStorage.removeItem('alfred_token'); localStorage.removeItem('alfred_user_data'); setIsAuthenticated(false); setCurrentUser(null); };
+
+  const handleAIAction = async (action: { type: AIActionType, payload: any }) => {
+      if (action.type === 'ADD_TRANSACTION') {
+          await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(action.payload) });
+          fetchDashboardData();
+      } else if (action.type === 'ADD_TASK') {
+          await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify({...action.payload, status: TaskStatus.PENDING}) });
+          fetchDashboardData();
+      } else if (action.type === 'UPDATE_TASK' && action.payload.id) {
+          await handleEditTask(action.payload.id, action.payload.updates);
+      }
   };
 
-  // Helper for Notifications
   const getDueItems = () => {
       const today = new Date().toISOString().split('T')[0];
-      const tomorrowDate = new Date();
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrow = tomorrowDate.toISOString().split('T')[0];
-
-      const dueTasks = tasks.filter(t => t.status !== TaskStatus.DONE && (t.date === today || t.date === tomorrow));
-      // Assume bills might be transactions in future? For now just tasks
-      return dueTasks;
+      const tomorrow = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
+      return tasks.filter(t => t.status !== TaskStatus.DONE && (t.date === today || t.date === tomorrow));
   };
   const dueItems = getDueItems();
 
@@ -186,7 +140,6 @@ const App = () => {
             <h1 className="text-2xl font-serif font-bold tracking-tight text-white">Alfred IA</h1>
           </div>
           
-          {/* Clock Display */}
           <div className="mb-6 px-3 py-2 bg-slate-800/50 rounded-lg flex items-center gap-2 text-slate-300 text-sm">
              <Clock size={16} className="text-gold-500" />
              <span>{currentTime.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
@@ -194,6 +147,7 @@ const App = () => {
 
           <nav className="space-y-1">
             <button onClick={() => setActiveModule(ModuleType.FINANCE)} className={btnClass(ModuleType.FINANCE)}><LayoutDashboard size={20}/> Financeiro</button>
+            <button onClick={() => setActiveModule(ModuleType.PROJECTS)} className={btnClass(ModuleType.PROJECTS)}><Target size={20}/> Projetos</button>
             <button onClick={() => setActiveModule(ModuleType.TASKS)} className={btnClass(ModuleType.TASKS)}><CheckSquare size={20}/> Tarefas</button>
             <button onClick={() => setActiveModule(ModuleType.LISTS)} className={btnClass(ModuleType.LISTS)}><List size={20}/> Listas & Compras</button>
             <button onClick={() => setActiveModule(ModuleType.TUTORIALS)} className={btnClass(ModuleType.TUTORIALS)}><BookOpen size={20}/> Tutoriais</button>
@@ -209,48 +163,34 @@ const App = () => {
         </div>
         <div className="border-t border-slate-800 pt-4">
              <div className="flex items-center gap-3 px-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-gold-600 flex items-center justify-center text-slate-900 font-bold">
-                    {currentUser?.name?.charAt(0) || 'U'}
-                </div>
-                <div className="overflow-hidden">
-                    <p className="text-sm font-medium text-white truncate">{currentUser?.name}</p>
-                    <p className="text-xs text-slate-500 truncate">{currentUser?.email}</p>
-                </div>
+                <div className="w-8 h-8 rounded-full bg-gold-600 flex items-center justify-center text-slate-900 font-bold">{currentUser?.name?.charAt(0) || 'U'}</div>
+                <div className="overflow-hidden"><p className="text-sm font-medium text-white truncate">{currentUser?.name}</p><p className="text-xs text-slate-500 truncate">{currentUser?.email}</p></div>
              </div>
              <button onClick={handleLogout} className="w-full flex gap-3 p-3 text-slate-500 hover:text-red-400 transition-colors"><LogOut size={20}/> Sair</button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
-        {/* Header with Notification */}
         <div className="absolute top-8 right-8 z-40">
             <div className="relative">
                 <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative">
                     <Bell size={24} />
                     {dueItems.length > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
                 </button>
-                
                 {showNotifications && (
                     <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
                         <div className="p-3 border-b border-slate-700 font-bold text-white text-sm">Notificações</div>
                         <div className="max-h-64 overflow-y-auto">
-                            {dueItems.length === 0 ? (
-                                <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência urgente.</p>
-                            ) : (
-                                dueItems.map(t => (
-                                    <div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50">
-                                        <p className="text-sm text-slate-200">{t.title}</p>
-                                        <p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p>
-                                    </div>
-                                ))
-                            )}
+                            {dueItems.length === 0 ? <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência urgente.</p> : dueItems.map(t => (<div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50"><p className="text-sm text-slate-200">{t.title}</p><p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p></div>))}
                         </div>
                     </div>
                 )}
             </div>
         </div>
 
-        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={async (t) => { await fetch('/api/transactions', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTransaction={async (id) => { await fetch(`/api/transactions/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); setTransactions(prev=>prev.filter(x=>x.id!==id)); }} isDarkMode={isDarkMode} />}
+        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={async (t) => { await fetch('/api/transactions', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTransaction={async (id) => { await fetch(`/api/transactions/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} isDarkMode={isDarkMode} />}
+        
+        {activeModule === ModuleType.PROJECTS && <FinancialProjectsModule projects={projects} isDarkMode={isDarkMode} onAddProject={async (p) => { await fetch('/api/projects', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(p)}); fetchDashboardData(); }} onUpdateProject={async (id, u) => { await fetch(`/api/projects/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(u)}); fetchDashboardData(); }} onDeleteProject={async (id) => { await fetch(`/api/projects/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} />}
         
         {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={async (id) => { await handleEditTask(id, {status: tasks.find(t=>t.id===id)?.status===TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE}); }} onAddTask={async (t) => { await fetch('/api/tasks', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTask={() => {}} onEditTask={handleEditTask} />}
         
@@ -265,15 +205,9 @@ const App = () => {
         <button onClick={() => setIsChatOpen(true)} className="fixed bottom-8 right-8 w-14 h-14 bg-gold-600 hover:bg-gold-500 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-transform z-50">
           <Bot className="text-slate-900 w-8 h-8" />
         </button>
-        <AlfredChat 
-            appContext={{ tasks, transactions }} 
-            isOpen={isChatOpen} 
-            onClose={() => setIsChatOpen(false)} 
-            onAIAction={handleAIAction} 
-        />
+        <AlfredChat appContext={{ tasks, transactions }} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onAIAction={handleAIAction} />
       </main>
     </div>
   );
 };
-
 export default App;

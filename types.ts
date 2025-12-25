@@ -1,5 +1,6 @@
 export enum ModuleType {
   FINANCE = 'FINANCE',
+  PROJECTS = 'PROJECTS',
   TASKS = 'TASKS',
   LISTS = 'LISTS',
   ADMIN = 'ADMIN',
@@ -21,7 +22,7 @@ export enum SubscriptionType {
 }
 
 export interface Plan {
-  id: string; // 'MONTHLY', 'SEMIANNUAL', 'ANNUAL'
+  id: string;
   name: string;
   type: SubscriptionType;
   price: number;
@@ -35,6 +36,8 @@ export enum TransactionType {
   INVESTMENT = 'INVESTMENT'
 }
 
+export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
 export interface Transaction {
   id: string;
   description: string;
@@ -42,7 +45,20 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   date: string;
-  recurrence?: 'NONE' | 'MONTHLY' | 'WEEKLY' | 'YEARLY';
+  recurrencePeriod?: RecurrencePeriod;
+  recurrenceInterval?: number; // ex: a cada 2 meses
+  recurrenceLimit?: number; // finalizar após X ocorrências
+}
+
+export interface FinancialProject {
+  id: string;
+  title: string;
+  description?: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string;
+  category: 'RESERVE' | 'GOAL' | 'ASSET';
+  status: 'ACTIVE' | 'COMPLETED' | 'PAUSED';
 }
 
 export enum TaskStatus {
@@ -60,7 +76,9 @@ export interface Task {
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
   notified?: boolean;
-  recurrence?: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  recurrencePeriod?: RecurrencePeriod;
+  recurrenceInterval?: number;
+  recurrenceLimit?: number;
 }
 
 export enum ItemStatus {
@@ -101,7 +119,7 @@ export interface User {
   planId?: string;
   trialEndsAt?: string;
   active: boolean;
-  isTestUser?: boolean; // Novo campo
+  isTestUser?: boolean;
   modules: ModuleType[];
   since: string;
   aiUsageTokenCount?: number;
@@ -144,7 +162,7 @@ export interface Coupon {
   code: string;
   type: 'PERCENTAGE' | 'FIXED';
   value: number;
-  appliesTo: SubscriptionType[]; // Array de strings
+  appliesTo: SubscriptionType[]; 
   active: boolean;
 }
 
@@ -187,7 +205,7 @@ export interface SystemConfig {
 export type AIActionType = 
   | 'ADD_TRANSACTION' 
   | 'ADD_TASK' 
-  | 'UPDATE_TASK' // Novo
+  | 'UPDATE_TASK'
   | 'ADD_LIST_ITEM' 
   | 'COMPLETE_LIST_ITEM'
   | 'NONE';
