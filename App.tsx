@@ -19,7 +19,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target, Info } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target, Info, Trash2, CheckCircle } from 'lucide-react';
 
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
@@ -43,11 +43,44 @@ const App = () => {
   // Time & Notification State
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
+  
+  // Local Notification State Management
+  const [readItems, setReadItems] = useState<string[]>([]);
+  const [deletedItems, setDeletedItems] = useState<string[]>([]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // Update every minute
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    // Load local state
+    const savedState = localStorage.getItem('alfred_notifications_state');
+    if (savedState) {
+        const { read, deleted } = JSON.parse(savedState);
+        setReadItems(read || []);
+        setDeletedItems(deleted || []);
+    }
     return () => clearInterval(timer);
   }, []);
+
+  const saveNotificationState = (read: string[], deleted: string[]) => {
+      localStorage.setItem('alfred_notifications_state', JSON.stringify({ read, deleted }));
+  };
+
+  const markAsRead = (id: string) => {
+      if (!readItems.includes(id)) {
+          const newRead = [...readItems, id];
+          setReadItems(newRead);
+          saveNotificationState(newRead, deletedItems);
+      }
+  };
+
+  const deleteNotification = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!deletedItems.includes(id)) {
+          const newDeleted = [...deletedItems, id];
+          setDeletedItems(newDeleted);
+          saveNotificationState(readItems, newDeleted);
+      }
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -133,7 +166,13 @@ const App = () => {
       const tomorrow = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
       return tasks.filter(t => t.status !== TaskStatus.DONE && (t.date === today || t.date === tomorrow));
   };
-  const dueItems = getDueItems();
+  
+  // Filter items for display
+  const activeDueItems = getDueItems().filter(t => !deletedItems.includes(t.id));
+  const activeAnnouncements = announcements.filter(a => !deletedItems.includes(a.id));
+  
+  const unreadCount = activeDueItems.filter(t => !readItems.includes(t.id)).length;
+  const unreadAnnouncementsCount = activeAnnouncements.filter(a => !readItems.includes(a.id)).length;
 
   if (!isAuthenticated) return <LoginPage onLogin={handleLogin} onRegister={() => {}} plans={[]} isDarkMode={isDarkMode} />;
 
@@ -179,40 +218,91 @@ const App = () => {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
-        <div className="absolute top-8 right-8 z-40">
+        {/* TOP BAR ICONS */}
+        <div className="absolute top-8 right-8 z-40 flex items-center gap-4">
+            
+            {/* ANNOUNCEMENTS ICON */}
             <div className="relative">
-                <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative">
+                <button 
+                    onClick={() => { setShowAnnouncements(!showAnnouncements); setShowNotifications(false); }} 
+                    className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative hover:bg-slate-700 transition-colors"
+                    title="Informativos"
+                >
+                    <Info size={24} />
+                    {unreadAnnouncementsCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>}
+                </button>
+                {showAnnouncements && (
+                    <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in z-50">
+                        <div className="p-3 bg-slate-800/80 font-bold text-gold-500 text-xs uppercase flex items-center justify-between">
+                            <span className="flex items-center gap-2"><Info size={14} /> Informativos do Sistema</span>
+                            <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded-full">{unreadAnnouncementsCount} novos</span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {activeAnnouncements.length === 0 ? (
+                                <p className="p-4 text-xs text-slate-500 text-center italic">Nenhum informativo.</p>
+                            ) : (
+                                activeAnnouncements.map(ann => (
+                                    <div 
+                                        key={ann.id} 
+                                        onClick={() => markAsRead(ann.id)}
+                                        className={`p-3 border-b border-slate-800/50 cursor-pointer transition-all relative group
+                                            ${readItems.includes(ann.id) ? 'bg-slate-900/50 opacity-60' : 'bg-slate-800 hover:bg-slate-700'}`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <p className={`text-sm font-bold mb-1 ${readItems.includes(ann.id) ? 'text-slate-400' : 'text-white'}`}>{ann.title}</p>
+                                            <button onClick={(e) => deleteNotification(ann.id, e)} className="text-slate-600 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">{ann.message}</p>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <p className="text-[10px] text-slate-600">{new Date(ann.date).toLocaleDateString()}</p>
+                                            {readItems.includes(ann.id) && <CheckCircle size={10} className="text-emerald-500" />}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* NOTIFICATIONS ICON */}
+            <div className="relative">
+                <button 
+                    onClick={() => { setShowNotifications(!showNotifications); setShowAnnouncements(false); }} 
+                    className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative hover:bg-slate-700 transition-colors"
+                    title="Tarefas e Pendências"
+                >
                     <Bell size={24} />
-                    {(dueItems.length > 0 || announcements.length > 0) && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
+                    {unreadCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
                 </button>
                 {showNotifications && (
                     <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in z-50">
-                        {/* ANNOUNCEMENTS SECTION */}
-                        {announcements.length > 0 && (
-                            <div className="border-b border-slate-700">
-                                <div className="p-3 bg-slate-800/50 font-bold text-gold-500 text-xs uppercase flex items-center gap-2">
-                                    <Info size={14} /> Informativos
-                                </div>
-                                <div className="max-h-48 overflow-y-auto">
-                                    {announcements.map(ann => (
-                                        <div key={ann.id} className="p-3 border-b border-slate-800/50 hover:bg-slate-800/30">
-                                            <p className="text-sm font-bold text-white mb-1">{ann.title}</p>
-                                            <p className="text-xs text-slate-400 leading-relaxed">{ann.message}</p>
-                                            <p className="text-[10px] text-slate-600 mt-2 text-right">{new Date(ann.date).toLocaleDateString()}</p>
+                        <div className="p-3 bg-slate-800/80 font-bold text-white text-xs uppercase flex items-center justify-between">
+                            <span className="flex items-center gap-2"><Clock size={14} /> Pendências Urgentes</span>
+                            <span className="text-[10px] bg-slate-900 px-2 py-0.5 rounded-full">{unreadCount} novos</span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {activeDueItems.length === 0 ? (
+                                <p className="p-4 text-xs text-slate-500 text-center italic">Nenhuma pendência urgente.</p>
+                            ) : (
+                                activeDueItems.map(t => (
+                                    <div 
+                                        key={t.id} 
+                                        onClick={() => markAsRead(t.id)}
+                                        className={`p-3 border-b border-slate-800/50 cursor-pointer transition-all relative group
+                                            ${readItems.includes(t.id) ? 'bg-slate-900/50 opacity-60' : 'bg-slate-800 hover:bg-slate-700'}`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <p className={`text-sm mb-1 ${readItems.includes(t.id) ? 'text-slate-400' : 'text-slate-200'}`}>{t.title}</p>
+                                            <button onClick={(e) => deleteNotification(t.id, e)} className="text-slate-600 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* TASKS SECTION */}
-                        <div>
-                            <div className="p-3 bg-slate-800/50 font-bold text-white text-xs uppercase flex items-center gap-2">
-                                <Clock size={14} /> Pendências Urgentes
-                            </div>
-                            <div className="max-h-48 overflow-y-auto">
-                                {dueItems.length === 0 ? <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência para hoje/amanhã.</p> : dueItems.map(t => (<div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50"><p className="text-sm text-slate-200">{t.title}</p><p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p></div>))}
-                            </div>
+                                        <div className="flex justify-between items-center">
+                                             <p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p>
+                                             {readItems.includes(t.id) && <CheckCircle size={10} className="text-emerald-500" />}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 )}

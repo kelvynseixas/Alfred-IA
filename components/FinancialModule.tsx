@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Transaction, TransactionType, DateRangeOption, RecurrencePeriod } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, Plus, X, List, Trash2, Edit2, Tag, CalendarRange, Download, FileSpreadsheet, FileText, Repeat, ArrowUpCircle, ArrowDownCircle, Target } from 'lucide-react';
+import { X, List, Trash2, Edit2, CalendarRange, Repeat, ArrowUpCircle, ArrowDownCircle, Target, Plus } from 'lucide-react';
 
 interface FinancialModuleProps {
   transactions: Transaction[];
@@ -25,6 +25,11 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   // Details Modal State
   const [detailsView, setDetailsView] = useState<TransactionType | null>(null);
   const [dateRange, setDateRange] = useState<DateRangeOption>('30D');
+
+  // --- Helper: Currency Formatter ---
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
 
   // --- Filter ---
   const filterTransactionsByDate = (txs: Transaction[]) => {
@@ -92,7 +97,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
       amount: parseFloat(newTrans.amount),
       type: newTrans.type,
       category: newTrans.category || 'Geral',
-      date: editingTransaction ? editingTransaction.date : new Date().toISOString(), // Keep original date if editing
+      date: editingTransaction ? editingTransaction.date : new Date().toISOString(),
       recurrencePeriod: newTrans.recurrencePeriod,
       recurrenceInterval: newTrans.recurrenceInterval,
       recurrenceLimit: newTrans.recurrenceLimit ? parseInt(newTrans.recurrenceLimit) : 0
@@ -120,152 +125,154 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
   return (
     <div className="space-y-6 animate-fade-in relative pb-12">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h2 className={`text-3xl font-serif ${textPrimary}`}>Gestão Financeira</h2>
           <p className={textSecondary}>CFO Digital Dashboard</p>
         </div>
-        <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full md:w-auto">
-             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <CalendarRange size={16} className={textSecondary} />
-                <select value={dateRange} onChange={(e) => setDateRange(e.target.value as DateRangeOption)} className={`bg-transparent text-sm font-medium focus:outline-none ${textPrimary}`}>
-                    <option value="7D">Últimos 7 dias</option>
-                    <option value="15D">Últimos 15 dias</option>
-                    <option value="30D">Últimos 30 dias</option>
-                    <option value="60D">Últimos 60 dias</option>
-                    <option value="CUSTOM">Todo Período</option>
-                </select>
-             </div>
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+            <CalendarRange size={16} className={textSecondary} />
+            <select value={dateRange} onChange={(e) => setDateRange(e.target.value as DateRangeOption)} className={`bg-transparent text-sm font-medium focus:outline-none ${textPrimary}`}>
+                <option value="7D">Últimos 7 dias</option>
+                <option value="15D">Últimos 15 dias</option>
+                <option value="30D">Últimos 30 dias</option>
+                <option value="60D">Últimos 60 dias</option>
+                <option value="CUSTOM">Todo Período</option>
+            </select>
         </div>
       </header>
       
-      {/* OVERVIEW BAR CHART */}
-      <div className={`p-6 rounded-xl border mb-6 ${cardBg}`}>
-           <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Visão Geral (Comparativo)</h3>
-           <div className="h-48 md:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overviewChartData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                        <XAxis type="number" stroke="#94a3b8" />
-                        <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} />
-                        <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
-                           {overviewChartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                           ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-           </div>
-      </div>
-
-      {/* 3 DETAILED CARDS (INCOME, EXPENSE, INVESTMENT) - NOW WITH BUTTONS INSIDE */}
+      {/* SECTION 1: SUMMARY CARDS (TOP) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           
           {/* INCOME CARD */}
-          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
-              <div className="flex justify-between items-center mb-2">
-                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Entradas</h3>
-                  <ArrowUpCircle size={20} className="text-emerald-500" />
+          <div className={`p-6 rounded-xl border flex flex-col justify-between h-48 ${cardBg} border-l-4 border-l-emerald-500 relative overflow-hidden group`}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <ArrowUpCircle size={64} className="text-emerald-500" />
               </div>
-              <p className="text-2xl font-serif font-bold text-emerald-400 mb-4">
-                  R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <div className="h-40 mb-4 flex-1 min-h-[160px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie data={incomeChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                              {incomeChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INCOME[index % COLORS_INCOME.length]} />))}
-                          </Pie>
-                          <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                      </PieChart>
-                  </ResponsiveContainer>
+              <div>
+                  <div className="flex justify-between items-center mb-2">
+                      <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Entradas</h3>
+                  </div>
+                  <p className="text-3xl font-serif font-bold text-emerald-400">
+                      {formatCurrency(totalIncome)}
+                  </p>
               </div>
-              <div className="flex gap-2 mt-auto">
-                 <button 
-                    onClick={() => openModal(TransactionType.INCOME)}
-                    className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                    <Plus size={14} /> Adicionar
-                </button>
-                 <button 
-                    onClick={() => setDetailsView(TransactionType.INCOME)}
-                    className="flex-1 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                    <List size={14} /> Detalhes
-                </button>
+              <div className="flex gap-3 mt-4 relative z-10">
+                 <button onClick={() => openModal(TransactionType.INCOME)} className="flex-1 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg"><Plus size={14} /> Adicionar</button>
+                 <button onClick={() => setDetailsView(TransactionType.INCOME)} className="flex-1 py-2 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"><List size={14} /> Detalhes</button>
               </div>
           </div>
 
           {/* EXPENSE CARD */}
-          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
-              <div className="flex justify-between items-center mb-2">
-                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Saídas</h3>
-                  <ArrowDownCircle size={20} className="text-red-500" />
+          <div className={`p-6 rounded-xl border flex flex-col justify-between h-48 ${cardBg} border-l-4 border-l-red-500 relative overflow-hidden group`}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <ArrowDownCircle size={64} className="text-red-500" />
               </div>
-              <p className="text-2xl font-serif font-bold text-red-400 mb-4">
-                  R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <div className="h-40 mb-4 flex-1 min-h-[160px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie data={expenseChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                              {expenseChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_EXPENSE[index % COLORS_EXPENSE.length]} />))}
-                          </Pie>
-                          <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                      </PieChart>
-                  </ResponsiveContainer>
+              <div>
+                  <div className="flex justify-between items-center mb-2">
+                      <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Saídas</h3>
+                  </div>
+                  <p className="text-3xl font-serif font-bold text-red-400">
+                      {formatCurrency(totalExpense)}
+                  </p>
               </div>
-              <div className="flex gap-2 mt-auto">
-                 <button 
-                    onClick={() => openModal(TransactionType.EXPENSE)}
-                    className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                     <Plus size={14} /> Adicionar
-                </button>
-                 <button 
-                    onClick={() => setDetailsView(TransactionType.EXPENSE)}
-                    className="flex-1 py-2 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                    <List size={14} /> Detalhes
-                </button>
+              <div className="flex gap-3 mt-4 relative z-10">
+                 <button onClick={() => openModal(TransactionType.EXPENSE)} className="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg"><Plus size={14} /> Adicionar</button>
+                 <button onClick={() => setDetailsView(TransactionType.EXPENSE)} className="flex-1 py-2 rounded bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"><List size={14} /> Detalhes</button>
               </div>
           </div>
 
           {/* INVESTMENT CARD */}
-          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
-              <div className="flex justify-between items-center mb-2">
-                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Investimentos</h3>
-                  <Target size={20} className="text-gold-500" />
+          <div className={`p-6 rounded-xl border flex flex-col justify-between h-48 ${cardBg} border-l-4 border-l-gold-500 relative overflow-hidden group`}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <Target size={64} className="text-gold-500" />
               </div>
-              <p className="text-2xl font-serif font-bold text-gold-400 mb-4">
-                  R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <div className="h-40 mb-4 flex-1 min-h-[160px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie data={investChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                              {investChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INVEST[index % COLORS_INVEST.length]} />))}
-                          </Pie>
-                          <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} />
-                      </PieChart>
-                  </ResponsiveContainer>
+              <div>
+                  <div className="flex justify-between items-center mb-2">
+                      <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Investimentos</h3>
+                  </div>
+                  <p className="text-3xl font-serif font-bold text-gold-400">
+                      {formatCurrency(totalInvested)}
+                  </p>
               </div>
-               <div className="flex gap-2 mt-auto">
-                 <button 
-                    onClick={() => openModal(TransactionType.INVESTMENT)}
-                    className="flex-1 py-2 rounded-lg bg-gold-600 hover:bg-gold-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                     <Plus size={14} /> Adicionar
-                </button>
-                 <button 
-                    onClick={() => setDetailsView(TransactionType.INVESTMENT)}
-                    className="flex-1 py-2 rounded-lg bg-gold-500/10 text-gold-400 font-bold hover:bg-gold-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
-                >
-                    <List size={14} /> Detalhes
-                </button>
+              <div className="flex gap-3 mt-4 relative z-10">
+                 <button onClick={() => openModal(TransactionType.INVESTMENT)} className="flex-1 py-2 rounded bg-gold-600 hover:bg-gold-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg"><Plus size={14} /> Adicionar</button>
+                 <button onClick={() => setDetailsView(TransactionType.INVESTMENT)} className="flex-1 py-2 rounded bg-gold-500/10 text-gold-400 hover:bg-gold-500 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"><List size={14} /> Detalhes</button>
               </div>
           </div>
+      </div>
+
+      {/* SECTION 2: CHARTS (BELOW) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+           {/* Chart 1: Overview Bar Chart (Spans 2 cols on large) */}
+           <div className={`p-4 rounded-xl border md:col-span-4 lg:col-span-2 ${cardBg}`}>
+                <h3 className={`text-xs font-bold uppercase mb-4 ${textSecondary}`}>Comparativo Geral</h3>
+                <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={overviewChartData} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                            <XAxis type="number" stroke="#94a3b8" tickFormatter={(val) => `R$${val/1000}k`} />
+                            <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} tick={{fontSize: 12}} />
+                            <Tooltip 
+                                contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px'}} 
+                                formatter={(value: number) => formatCurrency(value)}
+                            />
+                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                            {overviewChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+           </div>
+
+           {/* Chart 2: Income Breakdown */}
+           <div className={`p-4 rounded-xl border md:col-span-2 lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2 ${cardBg}`}>
+               
+               <div className="flex flex-col items-center">
+                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-emerald-500`}>Categorias (Entrada)</h3>
+                   <div className="w-full h-32">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={incomeChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
+                                    {incomeChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INCOME[index % COLORS_INCOME.length]} />))}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                   </div>
+               </div>
+
+               <div className="flex flex-col items-center">
+                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-red-500`}>Categorias (Saída)</h3>
+                   <div className="w-full h-32">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={expenseChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
+                                    {expenseChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_EXPENSE[index % COLORS_EXPENSE.length]} />))}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                   </div>
+               </div>
+
+               <div className="flex flex-col items-center">
+                   <h3 className={`text-[10px] font-bold uppercase mb-2 text-gold-500`}>Categorias (Invest.)</h3>
+                   <div className="w-full h-32">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={investChartData} innerRadius={25} outerRadius={40} paddingAngle={2} dataKey="value">
+                                    {investChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_INVEST[index % COLORS_INVEST.length]} />))}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155'}} formatter={(val:number) => formatCurrency(val)} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                   </div>
+               </div>
+           </div>
       </div>
 
       {/* Manual Entry/Edit Modal */}
@@ -294,23 +301,23 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
                     <div>
                         <label className="block text-xs text-slate-400 mb-1">Descrição</label>
-                        <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} required autoFocus />
+                        <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} required autoFocus />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Valor (R$)</label>
-                            <input type="number" step="0.01" className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none" value={newTrans.amount} onChange={e => setNewTrans({...newTrans, amount: e.target.value})} required />
+                            <input type="number" step="0.01" className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" value={newTrans.amount} onChange={e => setNewTrans({...newTrans, amount: e.target.value})} required />
                         </div>
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Categoria</label>
-                            <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none" placeholder="Ex: Salário" value={newTrans.category} onChange={e => setNewTrans({...newTrans, category: e.target.value})} />
+                            <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" placeholder="Ex: Salário" value={newTrans.category} onChange={e => setNewTrans({...newTrans, category: e.target.value})} />
                         </div>
                     </div>
 
                     <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                         <label className="block text-xs text-slate-400 mb-2 font-bold uppercase">Recorrência</label>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                            <select value={newTrans.recurrencePeriod} onChange={e => setNewTrans({...newTrans, recurrencePeriod: e.target.value as any})} className="bg-slate-900 border border-slate-700 rounded p-2 text-xs">
+                            <select value={newTrans.recurrencePeriod} onChange={e => setNewTrans({...newTrans, recurrencePeriod: e.target.value as any})} className="bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white">
                                 <option value="NONE">Não Repetir</option>
                                 <option value="DAILY">Diário</option>
                                 <option value="WEEKLY">Semanal</option>
@@ -320,7 +327,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                             {newTrans.recurrencePeriod !== 'NONE' && (
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-slate-400">A cada</span>
-                                    <input type="number" min="1" value={newTrans.recurrenceInterval} onChange={e => setNewTrans({...newTrans, recurrenceInterval: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-center" />
+                                    <input type="number" min="1" value={newTrans.recurrenceInterval} onChange={e => setNewTrans({...newTrans, recurrenceInterval: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-center text-white" />
                                     <span className="text-xs text-slate-400">{newTrans.recurrencePeriod === 'DAILY' ? 'dias' : newTrans.recurrencePeriod === 'MONTHLY' ? 'meses' : 'anos'}</span>
                                 </div>
                             )}
@@ -328,7 +335,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                         {newTrans.recurrencePeriod !== 'NONE' && (
                              <div className="flex items-center gap-2 mt-2">
                                 <span className="text-xs text-slate-400">Finalizar após</span>
-                                <input type="number" min="1" max="100" placeholder="∞" value={newTrans.recurrenceLimit} onChange={e => setNewTrans({...newTrans, recurrenceLimit: e.target.value})} className="w-16 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-center" />
+                                <input type="number" min="1" max="100" placeholder="∞" value={newTrans.recurrenceLimit} onChange={e => setNewTrans({...newTrans, recurrenceLimit: e.target.value})} className="w-16 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-center text-white" />
                                 <span className="text-xs text-slate-400">vezes</span>
                              </div>
                         )}
@@ -380,7 +387,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                                             {(!t.recurrencePeriod || t.recurrencePeriod === 'NONE') && '-'}
                                         </td>
                                         <td className={`px-4 py-3 text-right font-bold ${detailsView === TransactionType.INCOME ? 'text-emerald-400' : detailsView === TransactionType.EXPENSE ? 'text-red-400' : 'text-gold-400'}`}>
-                                            R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            {formatCurrency(t.amount)}
                                         </td>
                                         <td className="px-4 py-3 text-center flex justify-center gap-2">
                                             <button onClick={() => openEditModal(t)} className="p-1 hover:bg-blue-500/10 rounded text-slate-500 hover:text-blue-400 transition-colors" title="Editar"><Edit2 size={16} /></button>
