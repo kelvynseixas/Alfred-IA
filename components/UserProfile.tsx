@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { User, UserRole, Plan } from '../types';
-import { User as UserIcon, Mail, Lock, Eye, EyeOff, Camera, Phone, FileText, CreditCard, AlertTriangle } from 'lucide-react';
+import { User, Plan, PaymentHistory, SubscriptionType } from '../types';
+import { User as UserIcon, Lock, Eye, EyeOff, Camera, FileText, CreditCard, X, QrCode, Barcode, CheckCircle, Loader2 } from 'lucide-react';
 
 interface UserProfileProps {
   user: User;
@@ -11,6 +11,9 @@ interface UserProfileProps {
 
 export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMode, onUpdateUser }) => {
   const [showPass, setShowPass] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'SELECT' | 'PROCESSING' | 'SUCCESS'>('SELECT');
+  const [selectedMethod, setSelectedMethod] = useState<'PIX' | 'CREDIT_CARD' | 'BOLETO' | null>(null);
   
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -35,6 +38,51 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
   const inputClass = isDarkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
 
+  const handleProcessPayment = () => {
+      if (!selectedMethod || !currentPlan) return;
+
+      setPaymentStep('PROCESSING');
+
+      setTimeout(() => {
+          // Logic to extend subscription
+          const now = new Date();
+          const currentEnd = new Date(user.trialEndsAt || now);
+          // If expired, start counting from NOW, otherwise extend current date
+          const baseDate = currentEnd < now ? now : currentEnd;
+
+          let daysToAdd = 30;
+          if (user.subscription === SubscriptionType.QUARTERLY) daysToAdd = 90;
+          if (user.subscription === SubscriptionType.SEMIANNUAL) daysToAdd = 180;
+          if (user.subscription === SubscriptionType.ANNUAL) daysToAdd = 365;
+
+          const newEnd = new Date(baseDate.getTime() + (daysToAdd * 86400000));
+
+          const newHistoryItem: PaymentHistory = {
+              id: Date.now().toString(),
+              date: now.toISOString(),
+              amount: currentPlan.price,
+              method: selectedMethod,
+              status: 'PAID'
+          };
+
+          const updatedUser: User = {
+              ...user,
+              active: true, // Reactivate if suspended
+              trialEndsAt: newEnd.toISOString(),
+              paymentHistory: [newHistoryItem, ...(user.paymentHistory || [])]
+          };
+
+          onUpdateUser(updatedUser);
+          setPaymentStep('SUCCESS');
+      }, 3000); // Simulate 3s processing
+  };
+
+  const closePaymentModal = () => {
+      setIsPaymentModalOpen(false);
+      setPaymentStep('SELECT');
+      setSelectedMethod(null);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in max-w-4xl mx-auto">
       <header className={`mb-8 border-b pb-6 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
@@ -58,7 +106,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
                 <p className="text-slate-400 text-sm mb-4 uppercase font-bold tracking-widest">{user.role}</p>
                 
                 {daysRemaining <= 5 && (
-                    <button className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded font-bold text-sm flex items-center justify-center gap-2 mb-2 animate-pulse shadow-lg">
+                    <button 
+                        onClick={() => setIsPaymentModalOpen(true)}
+                        className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded font-bold text-sm flex items-center justify-center gap-2 mb-2 animate-pulse shadow-lg transition-transform active:scale-95"
+                    >
                         <CreditCard size={16} /> Pagar Agora
                     </button>
                 )}
@@ -155,7 +206,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
                                 <tr key={pay.id} className="border-b border-slate-700">
                                     <td className="p-3">{new Date(pay.date).toLocaleDateString()}</td>
                                     <td className="p-3 text-gold-500">R$ {pay.amount.toFixed(2)}</td>
-                                    <td className="p-3">{pay.method}</td>
+                                    <td className="p-3">{pay.method === 'CREDIT_CARD' ? 'Cartão' : pay.method}</td>
                                     <td className="p-3"><span className="text-emerald-500 text-xs font-bold">{pay.status}</span></td>
                                 </tr>
                             ))}
@@ -167,6 +218,105 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
             </div>
         </div>
       </div>
+
+      {/* PAYMENT MODAL */}
+      {isPaymentModalOpen && currentPlan && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl w-full max-w-md p-0 shadow-2xl overflow-hidden`}>
+                  
+                  {/* Modal Header */}
+                  <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                      <h3 className="text-white font-serif font-bold text-lg">Renovar Assinatura</h3>
+                      {paymentStep !== 'PROCESSING' && (
+                          <button onClick={closePaymentModal}><X className="text-slate-400 hover:text-white" /></button>
+                      )}
+                  </div>
+
+                  {/* STEP 1: SELECT METHOD */}
+                  {paymentStep === 'SELECT' && (
+                      <div className="p-6">
+                          <div className="text-center mb-6">
+                              <p className="text-slate-400 text-sm mb-1">Plano Selecionado</p>
+                              <p className={`text-2xl font-bold ${textPrimary}`}>{currentPlan.name}</p>
+                              <p className="text-gold-500 font-bold text-3xl mt-2">R$ {currentPlan.price.toFixed(2)}</p>
+                              <p className="text-xs text-slate-500">Ciclo {user.subscription}</p>
+                          </div>
+
+                          <div className="space-y-3">
+                              <button 
+                                onClick={() => setSelectedMethod('PIX')}
+                                className={`w-full p-4 rounded-lg border flex items-center justify-between transition-all ${selectedMethod === 'PIX' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'border-slate-700 hover:bg-slate-800 text-slate-400'}`}
+                              >
+                                  <div className="flex items-center gap-3">
+                                      <QrCode />
+                                      <span className="font-medium">PIX (Aprovação Imediata)</span>
+                                  </div>
+                                  {selectedMethod === 'PIX' && <CheckCircle size={18} />}
+                              </button>
+
+                              <button 
+                                onClick={() => setSelectedMethod('CREDIT_CARD')}
+                                className={`w-full p-4 rounded-lg border flex items-center justify-between transition-all ${selectedMethod === 'CREDIT_CARD' ? 'bg-blue-500/10 border-blue-500 text-blue-400' : 'border-slate-700 hover:bg-slate-800 text-slate-400'}`}
+                              >
+                                  <div className="flex items-center gap-3">
+                                      <CreditCard />
+                                      <span className="font-medium">Cartão de Crédito</span>
+                                  </div>
+                                  {selectedMethod === 'CREDIT_CARD' && <CheckCircle size={18} />}
+                              </button>
+
+                              <button 
+                                onClick={() => setSelectedMethod('BOLETO')}
+                                className={`w-full p-4 rounded-lg border flex items-center justify-between transition-all ${selectedMethod === 'BOLETO' ? 'bg-orange-500/10 border-orange-500 text-orange-400' : 'border-slate-700 hover:bg-slate-800 text-slate-400'}`}
+                              >
+                                  <div className="flex items-center gap-3">
+                                      <Barcode />
+                                      <span className="font-medium">Boleto Bancário</span>
+                                  </div>
+                                  {selectedMethod === 'BOLETO' && <CheckCircle size={18} />}
+                              </button>
+                          </div>
+
+                          <button 
+                            disabled={!selectedMethod}
+                            onClick={handleProcessPayment}
+                            className="w-full mt-6 bg-gold-600 hover:bg-gold-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg shadow-lg"
+                          >
+                              Continuar para Pagamento
+                          </button>
+                      </div>
+                  )}
+
+                  {/* STEP 2: PROCESSING */}
+                  {paymentStep === 'PROCESSING' && (
+                      <div className="p-8 flex flex-col items-center justify-center text-center min-h-[300px]">
+                          <Loader2 className="w-16 h-16 text-gold-500 animate-spin mb-4" />
+                          <h4 className={`text-xl font-bold mb-2 ${textPrimary}`}>Processando Pagamento...</h4>
+                          <p className="text-slate-500 text-sm">Validando transação com a operadora.</p>
+                          <p className="text-slate-500 text-xs mt-4">Por favor, não feche esta janela.</p>
+                      </div>
+                  )}
+
+                  {/* STEP 3: SUCCESS */}
+                  {paymentStep === 'SUCCESS' && (
+                      <div className="p-8 flex flex-col items-center justify-center text-center min-h-[300px]">
+                          <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                              <CheckCircle className="w-8 h-8 text-white" />
+                          </div>
+                          <h4 className={`text-2xl font-bold mb-2 text-emerald-500`}>Sucesso!</h4>
+                          <p className="text-slate-400 mb-6">Sua assinatura foi renovada com sucesso.</p>
+                          <button 
+                            onClick={closePaymentModal}
+                            className="bg-slate-700 hover:bg-slate-600 text-white px-8 py-2 rounded-lg font-medium"
+                          >
+                              Fechar
+                          </button>
+                      </div>
+                  )}
+
+              </div>
+          </div>
+      )}
     </div>
   );
 };

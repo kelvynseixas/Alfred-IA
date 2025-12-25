@@ -24,7 +24,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check, CreditCard, Trash2, Clock } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check, CreditCard, Trash2, Clock, Loader2 } from 'lucide-react';
 
 // Alfred Butler Icon (SVG Base64 for consistency)
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
@@ -33,6 +33,7 @@ const App = () => {
   // --- Auth State ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // --- Global UI State ---
   const [activeModule, setActiveModule] = useState<ModuleType>(ModuleType.FINANCE);
@@ -43,7 +44,7 @@ const App = () => {
   const [activePopup, setActivePopup] = useState<Announcement | null>(null);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
-  // --- Mock Data ---
+  // --- Mock Data (Kept for UI State until fully replaced by API hooks) ---
   const [notifications, setNotifications] = useState<Notification[]>([
     { id: 'n1', title: 'Conta a Vencer', message: 'Energia Elétrica vence amanhã.', type: 'FINANCE', read: false, date: new Date().toISOString() }
   ]);
@@ -63,34 +64,70 @@ const App = () => {
     { id: 'p4', name: 'Anual Premium', type: SubscriptionType.ANNUAL, price: 399.00, trialDays: 30, active: true }
   ]);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: '1', description: 'Salário Mensal', amount: 15000, type: TransactionType.INCOME, category: 'Salário', date: '2023-10-01' },
-    { id: '2', description: 'Supermercado', amount: 845.50, type: TransactionType.EXPENSE, category: 'Alimentação', date: '2023-10-03' }
-  ]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [lists, setLists] = useState<ListGroup[]>([]);
+  const [users, setUsers] = useState<User[]>([]); // Admin View
 
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: 'Revisar Estratégia Q4', date: '2023-10-25', time: '10:00', status: TaskStatus.PENDING, priority: 'high' }
-  ]);
-
-  const [lists, setLists] = useState<ListGroup[]>([
-    { id: '1', name: 'Compras Semanais', items: [{ id: '101', name: 'Leite', category: 'Laticínios', status: ItemStatus.PENDING }] }
-  ]);
-
-  const [users, setUsers] = useState<User[]>([
-    { 
-      id: 'admin', 
-      name: 'Admin Alfred', 
-      email: 'maisalem.md@gmail.com', 
-      phone: '+55 00 00000-0000', 
-      role: UserRole.ADMIN, 
-      active: true, 
-      modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS, ModuleType.ADMIN], 
-      since: '2024', 
-      paymentHistory: [],
-      readAnnouncements: [],
-      dismissedAnnouncements: []
+  // --- API Handlers ---
+  const handleLogin = async (email: string, pass: string) => {
+    setAuthLoading(true);
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: pass })
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            localStorage.setItem('alfred_token', data.token);
+            setCurrentUser(data.user);
+            setIsAuthenticated(true);
+            // In a full implementation, we would fetch data here
+            // loadUserData(data.token);
+        } else {
+            alert(data.error || "Erro ao fazer login");
+        }
+    } catch (error) {
+        console.error("Login error", error);
+        alert("Erro de conexão com o servidor.");
+    } finally {
+        setAuthLoading(false);
     }
-  ]);
+  };
+
+  const handleRegister = async (name: string, email: string, phone: string, subscription: SubscriptionType) => {
+    setAuthLoading(true);
+    try {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, phone, subscription, password: '123' }) // Default pass for now, usually user sets it
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+             localStorage.setItem('alfred_token', data.token);
+             setCurrentUser(data.user);
+             setIsAuthenticated(true);
+        } else {
+            alert(data.error || "Erro ao registrar");
+        }
+    } catch (error) {
+        alert("Erro de conexão.");
+    } finally {
+        setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('alfred_token');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setActiveModule(ModuleType.FINANCE);
+    setActivePopup(null);
+  };
 
   // --- Effects ---
   // 1. Popup Check
@@ -160,57 +197,7 @@ const App = () => {
   };
   const daysRemaining = getDaysRemaining();
 
-
-  // --- Handlers ---
-  const handleLogin = (email: string, pass: string) => {
-    if (email === 'maisalem.md@gmail.com' && pass === 'Alfred@1992') {
-      setCurrentUser(users[0]);
-      setIsAuthenticated(true);
-      return;
-    }
-    const user = users.find(u => u.email === email);
-    if (user) {
-      if(!user.active) { alert("Acesso suspenso."); return; }
-      setCurrentUser(user);
-      setIsAuthenticated(true);
-    } else {
-      alert("Credenciais inválidas");
-    }
-  };
-
-  const handleRegister = (name: string, email: string, phone: string, subscription: SubscriptionType) => {
-    const selectedPlan = plans.find(p => p.type === subscription);
-    const trialDays = selectedPlan ? selectedPlan.trialDays : 15;
-    
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      phone,
-      role: UserRole.USER,
-      subscription,
-      planId: selectedPlan?.id,
-      trialEndsAt: new Date(Date.now() + trialDays * 86400000).toISOString(),
-      active: true,
-      modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS],
-      since: new Date().getFullYear().toString(),
-      paymentHistory: [],
-      readAnnouncements: [],
-      dismissedAnnouncements: []
-    };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setActiveModule(ModuleType.FINANCE);
-    setActivePopup(null);
-  };
-
-  // --- CRUD Handlers ---
+  // --- CRUD Handlers (Currently Local State updated - ideally move to API) ---
   const handleUpdateUser = (updatedUser: User) => {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     if (currentUser?.id === updatedUser.id) setCurrentUser(updatedUser);
@@ -290,6 +277,7 @@ const App = () => {
   };
 
   if (!isAuthenticated) {
+    if (authLoading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white"><Loader2 className="animate-spin mr-2" /> Acessando Sistema...</div>;
     return <LoginPage onLogin={handleLogin} onRegister={handleRegister} plans={plans} isDarkMode={isDarkMode} />;
   }
 

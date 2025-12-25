@@ -1,20 +1,70 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Alfred IA - Ecossistema de Gestão Pessoal
 
-# Run and deploy your AI Studio app
+Um sistema premium, omnichannel de gestão financeira, tarefas e listas com interface de IA conversacional.
 
-This contains everything you need to run your app locally.
+## Stack Tecnológico
 
-View your app in AI Studio: https://ai.studio/apps/drive/1n0EhN39Id2SOsmj6b61Xc5DkHHbhzz6_
+- **Frontend**: React 19, TailwindCSS, Lucide Icons, Recharts
+- **Backend**: Node.js, Express
+- **Banco de Dados**: PostgreSQL
+- **IA**: Google Gemini API
 
-## Run Locally
+## Instalação e Deploy (VPS Ubuntu 22.04 LTS)
 
-**Prerequisites:**  Node.js
+Este projeto inclui um script de auto-instalação para facilitar o deploy em servidores Linux.
 
+### Pré-requisitos
+- Um servidor VPS com Ubuntu 22.04 LTS limpo.
+- Acesso root ou usuário com privilégios sudo.
+- Um domínio apontado para o IP do servidor (opcional, mas recomendado).
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Passo a Passo
+
+1. Conecte-se ao seu servidor via SSH:
+   ```bash
+   ssh root@seu-ip-vps
+   ```
+
+2. Clone este repositório (ou faça upload dos arquivos):
+   ```bash
+   git clone https://seu-repositorio/alfred-ia.git
+   cd alfred-ia
+   ```
+
+3. Dê permissão de execução ao script de instalação:
+   ```bash
+   chmod +x install.sh
+   ```
+
+4. Execute o instalador informando o seu domínio (ou IP se não tiver domínio):
+   ```bash
+   ./install.sh meudominio.com
+   # ou
+   ./install.sh 123.456.78.90
+   ```
+
+O script irá automaticamente:
+- Atualizar o sistema.
+- Instalar Node.js, Nginx e PostgreSQL.
+- Configurar o Banco de Dados e criar o usuário Admin.
+- Instalar dependências e iniciar o Backend com PM2.
+- Construir o Frontend e configurar o Nginx como proxy reverso.
+- Configurar firewall básico.
+
+### Acesso ao Sistema
+
+Após a instalação, acesse pelo navegador: `http://meudominio.com`
+
+**Credenciais Padrão:**
+- **Email:** `maisalem.md@gmail.com`
+- **Senha:** `Alfred@1992`
+
+> **Nota:** Por segurança, altere a senha do admin imediatamente após o primeiro login.
+
+## Desenvolvimento Local
+
+1. Instale as dependências: `npm install`
+2. Configure o banco de dados Postgres localmente.
+3. Crie um arquivo `.env` na pasta `server` com as credenciais do banco.
+4. Inicie o backend: `cd server && node index.js`
+5. Em outro terminal, inicie o frontend: `npm run dev`
