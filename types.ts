@@ -58,6 +58,7 @@ export interface Task {
   time?: string;
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
+  notified?: boolean;
 }
 
 export enum ItemStatus {
@@ -104,6 +105,7 @@ export interface User {
   avatarUrl?: string;
   paymentHistory?: PaymentHistory[];
   readAnnouncements?: string[]; // IDs of read announcements
+  dismissedAnnouncements?: string[]; // IDs of hidden announcements
 }
 
 export interface Notification {

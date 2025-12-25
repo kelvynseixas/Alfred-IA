@@ -24,7 +24,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check, CreditCard } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info, X, Check, CreditCard, Trash2, Clock } from 'lucide-react';
 
 // Alfred Butler Icon (SVG Base64 for consistency)
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
@@ -41,6 +41,7 @@ const App = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showInformatics, setShowInformatics] = useState(false);
   const [activePopup, setActivePopup] = useState<Announcement | null>(null);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   // --- Mock Data ---
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -86,27 +87,67 @@ const App = () => {
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS, ModuleType.ADMIN], 
       since: '2024', 
       paymentHistory: [],
-      readAnnouncements: []
+      readAnnouncements: [],
+      dismissedAnnouncements: []
     }
   ]);
 
   // --- Effects ---
+  // 1. Popup Check
   useEffect(() => {
-    // Check for popups when user logs in or announcements change
     if (isAuthenticated && currentUser) {
         const unreadPopups = announcements.filter(a => 
             a.isPopup && 
-            !currentUser.readAnnouncements?.includes(a.id)
+            !currentUser.readAnnouncements?.includes(a.id) &&
+            !currentUser.dismissedAnnouncements?.includes(a.id)
         );
         
-        // Show the most recent unread popup
         if (unreadPopups.length > 0) {
-            // Sort by date desc
             unreadPopups.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setActivePopup(unreadPopups[0]);
         }
     }
   }, [isAuthenticated, currentUser, announcements]);
+
+  // 2. Task Notification Checker & Clock
+  useEffect(() => {
+      const timer = setInterval(() => {
+          const now = new Date();
+          setCurrentDateTime(now); // Update Clock
+
+          if (!isAuthenticated) return;
+
+          // Check tasks
+          const nowStr = now.toISOString().split('T')[0];
+          const currentTimeStr = now.toTimeString().slice(0, 5); // HH:MM
+
+          const dueTasks = tasks.filter(t => 
+              t.status === TaskStatus.PENDING && 
+              !t.notified &&
+              t.date === nowStr &&
+              (!t.time || t.time <= currentTimeStr)
+          );
+
+          if (dueTasks.length > 0) {
+               const newNotifs: Notification[] = dueTasks.map(t => ({
+                   id: `notif-task-${t.id}`,
+                   title: 'Tarefa Pendente',
+                   message: `Lembrete: "${t.title}" está agendada para hoje.`,
+                   type: 'TASK',
+                   read: false,
+                   date: new Date().toISOString()
+               }));
+
+               setNotifications(prev => [...newNotifs, ...prev]);
+               
+               // Mark as notified
+               setTasks(prev => prev.map(t => dueTasks.find(dt => dt.id === t.id) ? { ...t, notified: true } : t));
+          }
+
+      }, 10000); // Check every 10 seconds
+
+      return () => clearInterval(timer);
+  }, [tasks, isAuthenticated]);
 
 
   // --- Helper: Days Remaining ---
@@ -141,7 +182,6 @@ const App = () => {
     const selectedPlan = plans.find(p => p.type === subscription);
     const trialDays = selectedPlan ? selectedPlan.trialDays : 15;
     
-    // Logic handles in Login Page for Payment if trial is 0, here we just create
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -155,7 +195,8 @@ const App = () => {
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS],
       since: new Date().getFullYear().toString(),
       paymentHistory: [],
-      readAnnouncements: []
+      readAnnouncements: [],
+      dismissedAnnouncements: []
     };
     setUsers([...users, newUser]);
     setCurrentUser(newUser);
@@ -180,7 +221,6 @@ const App = () => {
       if (action === 'CREATE') setPlans(prev => [...prev, plan]);
       if (action === 'UPDATE') setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
       if (action === 'DELETE') {
-          // Explicitly filter out the ID
           setPlans(prev => prev.filter(p => p.id !== plan.id));
       }
   };
@@ -194,7 +234,7 @@ const App = () => {
 
   // Task Handlers
   const handleToggleTask = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE } : t));
-  const handleAddTask = (t: Omit<Task, 'id'>) => setTasks(prev => [...prev, { ...t, id: Date.now().toString() }]);
+  const handleAddTask = (t: Omit<Task, 'id'>) => setTasks(prev => [...prev, { ...t, id: Date.now().toString(), notified: false }]);
   const handleEditTask = (id: string, updates: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   const handleDeleteTask = (id: string) => setTasks(prev => prev.filter(t => t.id !== id));
 
@@ -205,9 +245,14 @@ const App = () => {
   const handleAddTransaction = (t: Omit<Transaction, 'id'>) => setTransactions(prev => [...prev, { ...t, id: Date.now().toString() }]);
   const handleDeleteTransaction = (id: string) => setTransactions(prev => prev.filter(t => t.id !== id));
   
-  // Notification & Announcement Read Logic
+  // Notification & Announcement Read/Delete Logic
   const handleMarkNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const handleDeleteNotification = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
   const handleMarkAnnouncementAsRead = (id: string) => {
@@ -217,6 +262,16 @@ const App = () => {
         const updatedUser = { ...currentUser, readAnnouncements: [...currentRead, id] };
         handleUpdateUser(updatedUser);
     }
+  };
+
+  const handleDismissAnnouncement = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!currentUser) return;
+      const currentDismissed = currentUser.dismissedAnnouncements || [];
+      if (!currentDismissed.includes(id)) {
+          const updatedUser = { ...currentUser, dismissedAnnouncements: [...currentDismissed, id] };
+          handleUpdateUser(updatedUser);
+      }
   };
 
   const handleAIAction = (action: { type: AIActionType, payload: any }) => {
@@ -238,6 +293,9 @@ const App = () => {
     return <LoginPage onLogin={handleLogin} onRegister={handleRegister} plans={plans} isDarkMode={isDarkMode} />;
   }
 
+  // Filter visible announcements
+  const visibleAnnouncements = announcements.filter(a => !currentUser?.dismissedAnnouncements?.includes(a.id));
+
   return (
     <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
       <aside className={`w-20 lg:w-64 border-r flex flex-col justify-between z-20 transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
@@ -258,6 +316,12 @@ const App = () => {
                      <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser?.name}</p>
                      <p className={`text-xs truncate text-slate-500 uppercase font-bold tracking-tighter`}>{currentUser?.role}</p>
                  </div>
+             </div>
+
+             {/* CLOCK */}
+             <div className={`mt-4 hidden lg:flex items-center gap-2 text-xs font-mono p-2 rounded ${isDarkMode ? 'bg-slate-950 text-emerald-400 border border-slate-800' : 'bg-slate-100 text-emerald-600 border border-slate-200'}`}>
+                 <Clock size={14} />
+                 <span>{currentDateTime.toLocaleDateString()} {currentDateTime.toLocaleTimeString().slice(0,5)}</span>
              </div>
           </div>
 
@@ -323,26 +387,34 @@ const App = () => {
             <div className="relative">
                 <button onClick={() => setShowInformatics(!showInformatics)} className={`p-2 rounded-full relative ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}>
                     <Info size={20} />
-                    {announcements.some(a => !currentUser?.readAnnouncements?.includes(a.id)) && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900"></span>}
+                    {visibleAnnouncements.some(a => !currentUser?.readAnnouncements?.includes(a.id)) && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900"></span>}
                 </button>
                 {showInformatics && (
                     <div className={`absolute right-0 mt-2 w-80 rounded-xl shadow-2xl border overflow-hidden z-50 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
                         <div className={`p-3 border-b font-medium text-sm flex justify-between items-center ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-100 text-slate-800'}`}>
                             <span>Informativos</span>
-                            <span className="text-[10px] text-slate-500">Clique para marcar lido</span>
                         </div>
                         <div className="max-h-64 overflow-y-auto">
-                            {announcements.length === 0 ? <p className="p-4 text-center text-xs text-slate-500">Sem comunicados.</p> : announcements.map(a => {
+                            {visibleAnnouncements.length === 0 ? <p className="p-4 text-center text-xs text-slate-500">Sem comunicados.</p> : visibleAnnouncements.map(a => {
                                 const isRead = currentUser?.readAnnouncements?.includes(a.id);
                                 return (
                                 <div 
                                     key={a.id} 
                                     onClick={() => handleMarkAnnouncementAsRead(a.id)}
-                                    className={`p-3 border-b text-sm last:border-0 cursor-pointer ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-slate-100 hover:bg-slate-50'} ${!isRead ? 'bg-blue-500/10' : ''}`}
+                                    className={`p-3 border-b text-sm last:border-0 cursor-pointer relative group ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-slate-100 hover:bg-slate-50'} ${!isRead ? 'bg-blue-500/10' : ''}`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <p className={`font-medium ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{a.title}</p>
+                                        <p className={`font-medium pr-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{a.title}</p>
                                         {!isRead && <span className="w-2 h-2 rounded-full bg-blue-500"></span>}
+                                        {isRead && (
+                                            <button 
+                                                onClick={(e) => handleDismissAnnouncement(a.id, e)}
+                                                className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="Ocultar Informativo"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-xs text-slate-400">{a.message}</p>
                                     <p className="text-[10px] text-slate-600 mt-2 text-right">{new Date(a.date).toLocaleDateString()}</p>
@@ -367,11 +439,20 @@ const App = () => {
                                 <div 
                                     key={n.id} 
                                     onClick={() => handleMarkNotificationAsRead(n.id)}
-                                    className={`p-3 border-b text-sm last:border-0 cursor-pointer ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-slate-100 hover:bg-slate-50'} ${!n.read ? 'bg-red-500/5' : ''}`}
+                                    className={`p-3 border-b text-sm last:border-0 cursor-pointer relative group ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-slate-100 hover:bg-slate-50'} ${!n.read ? 'bg-red-500/5' : ''}`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <p className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{n.title}</p>
+                                        <p className={`font-medium pr-6 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{n.title}</p>
                                         {!n.read && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                                        {n.read && (
+                                            <button 
+                                                onClick={(e) => handleDeleteNotification(n.id, e)}
+                                                className="absolute top-2 right-2 p-1 text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="Excluir Notificação"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-xs text-slate-400">{n.message}</p>
                                     <p className="text-[10px] text-slate-600 mt-1 text-right">{new Date(n.date).toLocaleDateString()}</p>
@@ -437,6 +518,7 @@ const App = () => {
                      <button 
                         onClick={() => {
                             handleMarkAnnouncementAsRead(activePopup.id);
+                            handleDismissAnnouncement(activePopup.id, {} as any); // Also hide from further popups
                             setActivePopup(null);
                         }} 
                         className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium flex items-center gap-2"

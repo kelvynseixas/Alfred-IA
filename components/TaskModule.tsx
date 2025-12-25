@@ -23,6 +23,13 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, o
     }
   };
 
+  const formatDateDisplay = (dateStr: string) => {
+      // Input is YYYY-MM-DD. We want DD/MM/YYYY without timezone shift.
+      if(!dateStr) return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+  };
+
   const openNewTaskModal = () => {
       setEditingTask(null);
       setTaskForm({ priority: 'medium', status: TaskStatus.PENDING, title: '', date: '', time: '' });
@@ -108,7 +115,7 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, o
                                             {task.title}
                                         </p>
                                         <div className="flex gap-3 text-xs text-slate-400 mt-1">
-                                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(task.date).toLocaleDateString('pt-BR')}</span>
+                                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {formatDateDisplay(task.date)}</span>
                                             {task.time && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {task.time}</span>}
                                         </div>
                                     </div>
