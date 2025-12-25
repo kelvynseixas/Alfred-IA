@@ -44,6 +44,9 @@ const initDB = async () => {
         await pool.query(`CREATE TABLE IF NOT EXISTS plans (id VARCHAR(50) PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), trial_days INTEGER, active BOOLEAN DEFAULT TRUE)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS coupons (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), value DECIMAL(10,2), applies_to JSONB, active BOOLEAN DEFAULT TRUE)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS tutorials (id SERIAL PRIMARY KEY, title VARCHAR(255), description TEXT, video_url VARCHAR(255))`);
+        
+        // Informativos
+        await pool.query(`CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title VARCHAR(255), message TEXT, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, active BOOLEAN DEFAULT TRUE)`);
 
         // Seed Admin
         const adminEmail = 'maisalem.md@gmail.com';
@@ -94,6 +97,7 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
         const transactions = await pool.query('SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC', [userId]);
         const projects = await pool.query('SELECT * FROM financial_projects WHERE user_id = $1 ORDER BY id DESC', [userId]);
         const config = await pool.query('SELECT value FROM system_configs WHERE key = $1', ['general_config']);
+        const announcements = await pool.query('SELECT * FROM announcements WHERE active = TRUE ORDER BY date DESC LIMIT 5');
         
         const listsQuery = await pool.query('SELECT * FROM list_groups WHERE user_id = $1 ORDER BY id DESC', [userId]);
         const lists = listsQuery.rows;
@@ -109,6 +113,7 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             const users = await pool.query('SELECT id, name, email, role, active, subscription, trial_ends_at, is_test_user, created_at FROM users ORDER BY id DESC');
             const plans = await pool.query('SELECT * FROM plans');
             const coupons = await pool.query('SELECT * FROM coupons');
+            // Admin sees all announcements including inactive if needed, but for now simple
             adminData = { users: users.rows, plans: plans.rows, coupons: coupons.rows };
         }
 
@@ -118,6 +123,7 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             projects: projects.rows,
             lists: lists,
             tutorials: tutorials.rows,
+            announcements: announcements.rows,
             config: config.rows[0]?.value || {},
             ...adminData
         });
@@ -329,6 +335,14 @@ app.post('/api/admin/tutorials', authenticateToken, async (req, res) => {
     const { title, description, videoUrl } = req.body;
     try {
         const result = await pool.query('INSERT INTO tutorials (title, description, video_url) VALUES ($1, $2, $3) RETURNING *', [title, description, videoUrl]);
+        res.json(result.rows[0]);
+    } catch (e) { res.sendStatus(500); }
+});
+app.post('/api/admin/announcements', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'ADMIN') return res.sendStatus(403);
+    const { title, message } = req.body;
+    try {
+        const result = await pool.query('INSERT INTO announcements (title, message) VALUES ($1, $2) RETURNING *', [title, message]);
         res.json(result.rows[0]);
     } catch (e) { res.sendStatus(500); }
 });

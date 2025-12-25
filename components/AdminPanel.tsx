@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Plan, Tutorial, Announcement, SystemConfig, Coupon, SubscriptionType } from '../types';
-import { LayoutGrid, Box, CreditCard, PlayCircle, Globe, Cpu, Smartphone, Save, CheckCircle, Loader2, AlertCircle, User as UserIcon, Tag, Plus, Trash2, Edit, Search, UserPlus, Lock } from 'lucide-react';
+import { LayoutGrid, Box, CreditCard, PlayCircle, Globe, Cpu, Smartphone, Save, CheckCircle, Loader2, AlertCircle, User as UserIcon, Tag, Plus, Trash2, Edit, Search, UserPlus, Lock, Megaphone } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -15,7 +15,7 @@ interface AdminPanelProps {
   onAddAnnouncement: (ann: Announcement) => void;
 }
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
   // Config State
@@ -43,7 +43,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
       code: '', value: 0, type: 'PERCENTAGE', appliesTo: [] 
   });
   const [newTutorial, setNewTutorial] = useState({ title: '', description: '', videoUrl: '' });
-  
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
+
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -118,6 +119,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
       onManageTutorial();
   };
   
+  const handleCreateAnnouncement = async () => {
+      const res = await fetch('/api/admin/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(newAnnouncement) });
+      if(res.ok) {
+          const data = await res.json();
+          onAddAnnouncement(data);
+          setNewAnnouncement({ title: '', message: '' });
+          alert('Informativo enviado!');
+      }
+  };
+  
   const toggleCouponPlan = (planId: SubscriptionType) => {
       setNewCoupon(prev => {
           const current = prev.appliesTo;
@@ -158,6 +169,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                 <button onClick={() => setActiveTab('DASHBOARD')} className={tabClass('DASHBOARD')}>Dashboard & Clientes</button>
                 <button onClick={() => setActiveTab('PLANS')} className={tabClass('PLANS')}>Planos</button>
                 <button onClick={() => setActiveTab('COUPONS')} className={tabClass('COUPONS')}>Cupons</button>
+                <button onClick={() => setActiveTab('ANNOUNCEMENTS')} className={tabClass('ANNOUNCEMENTS')}>Informativos</button>
                 <button onClick={() => setActiveTab('FINANCE')} className={tabClass('FINANCE')}>Financeiro</button>
                 <button onClick={() => setActiveTab('INTEGRATIONS')} className={tabClass('INTEGRATIONS')}>Integrações</button>
                 <button onClick={() => setActiveTab('TUTORIALS')} className={tabClass('TUTORIALS')}>Tutoriais</button>
@@ -230,6 +242,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                        </div>
                    </div>
                )}
+          </div>
+      )}
+      
+      {/* ANNOUNCEMENTS TAB */}
+      {activeTab === 'ANNOUNCEMENTS' && (
+          <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                   <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2"><Megaphone size={20} className="text-gold-500" /> Enviar Informativo</h3>
+                   <div className="space-y-4">
+                       <input placeholder="Título" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} className={inputClass} />
+                       <textarea placeholder="Mensagem para todos os clientes..." rows={4} value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} className={inputClass} />
+                       <button onClick={handleCreateAnnouncement} className="bg-gold-600 hover:bg-gold-500 text-white px-6 py-2 rounded text-sm font-bold w-full md:w-auto">Enviar para Todos</button>
+                   </div>
+               </div>
           </div>
       )}
 

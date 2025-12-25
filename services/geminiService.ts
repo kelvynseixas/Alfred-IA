@@ -64,7 +64,11 @@ export const sendMessageToAlfred = async (
       }
     });
 
-    return JSON.parse(response.text || '{}') as AIResponse;
+    let text = response.text || '{}';
+    // Remove markdown code blocks if present to ensure clean JSON
+    text = text.replace(/```json/g, '').replace(/```/g, '');
+
+    return JSON.parse(text) as AIResponse;
   } catch (error) {
     console.error(error);
     return {

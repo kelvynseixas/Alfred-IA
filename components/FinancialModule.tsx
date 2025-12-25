@@ -44,8 +44,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   const totalIncome = filteredData.filter(t => t.type === TransactionType.INCOME).reduce((acc, curr) => acc + curr.amount, 0);
   const totalExpense = filteredData.filter(t => t.type === TransactionType.EXPENSE).reduce((acc, curr) => acc + curr.amount, 0);
   const totalInvested = filteredData.filter(t => t.type === TransactionType.INVESTMENT).reduce((acc, curr) => acc + curr.amount, 0);
-  const balance = totalIncome - totalExpense - totalInvested;
-
+  
   const overviewChartData = [
     { name: 'Entradas', value: totalIncome, fill: '#10b981' },
     { name: 'Saídas', value: totalExpense, fill: '#ef4444' },
@@ -121,7 +120,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
   return (
     <div className="space-y-6 animate-fade-in relative pb-12">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <div>
           <h2 className={`text-3xl font-serif ${textPrimary}`}>Gestão Financeira</h2>
           <p className={textSecondary}>CFO Digital Dashboard</p>
@@ -140,28 +139,6 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
         </div>
       </header>
       
-      {/* QUICK ACTIONS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <button 
-            onClick={() => openModal(TransactionType.INCOME)}
-            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
-          >
-              <ArrowUpCircle size={24} /> Nova Entrada
-          </button>
-          <button 
-            onClick={() => openModal(TransactionType.EXPENSE)}
-            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
-          >
-              <ArrowDownCircle size={24} /> Nova Saída
-          </button>
-          <button 
-            onClick={() => openModal(TransactionType.INVESTMENT)}
-            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-gold-600 hover:bg-gold-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
-          >
-              <Target size={24} /> Novo Investimento
-          </button>
-      </div>
-
       {/* OVERVIEW BAR CHART */}
       <div className={`p-6 rounded-xl border mb-6 ${cardBg}`}>
            <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Visão Geral (Comparativo)</h3>
@@ -182,11 +159,11 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
            </div>
       </div>
 
-      {/* 3 DETAILED CARDS (INCOME, EXPENSE, INVESTMENT) */}
+      {/* 3 DETAILED CARDS (INCOME, EXPENSE, INVESTMENT) - NOW WITH BUTTONS INSIDE */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           
           {/* INCOME CARD */}
-          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
               <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Entradas</h3>
                   <ArrowUpCircle size={20} className="text-emerald-500" />
@@ -194,7 +171,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
               <p className="text-2xl font-serif font-bold text-emerald-400 mb-4">
                   R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              <div className="h-40 mb-4 flex-1">
+              <div className="h-40 mb-4 flex-1 min-h-[160px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie data={incomeChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
@@ -204,16 +181,24 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                       </PieChart>
                   </ResponsiveContainer>
               </div>
-              <button 
-                  onClick={() => setDetailsView(TransactionType.INCOME)}
-                  className="w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500 hover:text-white transition-colors flex items-center justify-center gap-2"
-              >
-                  <List size={16} /> Ver Detalhes
-              </button>
+              <div className="flex gap-2 mt-auto">
+                 <button 
+                    onClick={() => openModal(TransactionType.INCOME)}
+                    className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                    <Plus size={14} /> Adicionar
+                </button>
+                 <button 
+                    onClick={() => setDetailsView(TransactionType.INCOME)}
+                    className="flex-1 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                    <List size={14} /> Detalhes
+                </button>
+              </div>
           </div>
 
           {/* EXPENSE CARD */}
-          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
               <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Saídas</h3>
                   <ArrowDownCircle size={20} className="text-red-500" />
@@ -221,7 +206,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
               <p className="text-2xl font-serif font-bold text-red-400 mb-4">
                   R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              <div className="h-40 mb-4 flex-1">
+              <div className="h-40 mb-4 flex-1 min-h-[160px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie data={expenseChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
@@ -231,16 +216,24 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                       </PieChart>
                   </ResponsiveContainer>
               </div>
-              <button 
-                  onClick={() => setDetailsView(TransactionType.EXPENSE)}
-                  className="w-full py-2 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
-              >
-                  <List size={16} /> Ver Detalhes
-              </button>
+              <div className="flex gap-2 mt-auto">
+                 <button 
+                    onClick={() => openModal(TransactionType.EXPENSE)}
+                    className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                     <Plus size={14} /> Adicionar
+                </button>
+                 <button 
+                    onClick={() => setDetailsView(TransactionType.EXPENSE)}
+                    className="flex-1 py-2 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                    <List size={14} /> Detalhes
+                </button>
+              </div>
           </div>
 
           {/* INVESTMENT CARD */}
-          <div className={`p-4 rounded-xl border flex flex-col ${cardBg}`}>
+          <div className={`p-5 rounded-xl border flex flex-col h-full ${cardBg}`}>
               <div className="flex justify-between items-center mb-2">
                   <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Investimentos</h3>
                   <Target size={20} className="text-gold-500" />
@@ -248,7 +241,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
               <p className="text-2xl font-serif font-bold text-gold-400 mb-4">
                   R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              <div className="h-40 mb-4 flex-1">
+              <div className="h-40 mb-4 flex-1 min-h-[160px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie data={investChartData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
@@ -258,12 +251,20 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                       </PieChart>
                   </ResponsiveContainer>
               </div>
-              <button 
-                  onClick={() => setDetailsView(TransactionType.INVESTMENT)}
-                  className="w-full py-2 rounded-lg bg-gold-500/10 text-gold-400 font-bold hover:bg-gold-500 hover:text-white transition-colors flex items-center justify-center gap-2"
-              >
-                  <List size={16} /> Ver Detalhes
-              </button>
+               <div className="flex gap-2 mt-auto">
+                 <button 
+                    onClick={() => openModal(TransactionType.INVESTMENT)}
+                    className="flex-1 py-2 rounded-lg bg-gold-600 hover:bg-gold-500 text-white font-bold transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                     <Plus size={14} /> Adicionar
+                </button>
+                 <button 
+                    onClick={() => setDetailsView(TransactionType.INVESTMENT)}
+                    className="flex-1 py-2 rounded-lg bg-gold-500/10 text-gold-400 font-bold hover:bg-gold-500 hover:text-white transition-colors text-xs flex items-center justify-center gap-1"
+                >
+                    <List size={14} /> Detalhes
+                </button>
+              </div>
           </div>
       </div>
 

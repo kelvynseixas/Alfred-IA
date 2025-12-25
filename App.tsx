@@ -7,7 +7,8 @@ import {
   ListGroup, 
   User,
   AIActionType,
-  FinancialProject
+  FinancialProject,
+  Announcement
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
 import { FinancialProjectsModule } from './components/FinancialProjectsModule'; // Novo
@@ -18,7 +19,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target, Info } from 'lucide-react';
 
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
@@ -37,6 +38,7 @@ const App = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [tutorials, setTutorials] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   // Time & Notification State
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -64,6 +66,7 @@ const App = () => {
             setTasks(data.tasks || []);
             setLists(data.lists || []);
             setProjects(data.projects || []);
+            setAnnouncements(data.announcements || []);
             if(data.users) setUsers(data.users);
             if(data.plans) setPlans(data.plans);
             if(data.coupons) setCoupons(data.coupons);
@@ -180,13 +183,36 @@ const App = () => {
             <div className="relative">
                 <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative">
                     <Bell size={24} />
-                    {dueItems.length > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
+                    {(dueItems.length > 0 || announcements.length > 0) && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
                 </button>
                 {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
-                        <div className="p-3 border-b border-slate-700 font-bold text-white text-sm">Notificações</div>
-                        <div className="max-h-64 overflow-y-auto">
-                            {dueItems.length === 0 ? <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência urgente.</p> : dueItems.map(t => (<div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50"><p className="text-sm text-slate-200">{t.title}</p><p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p></div>))}
+                    <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in z-50">
+                        {/* ANNOUNCEMENTS SECTION */}
+                        {announcements.length > 0 && (
+                            <div className="border-b border-slate-700">
+                                <div className="p-3 bg-slate-800/50 font-bold text-gold-500 text-xs uppercase flex items-center gap-2">
+                                    <Info size={14} /> Informativos
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                    {announcements.map(ann => (
+                                        <div key={ann.id} className="p-3 border-b border-slate-800/50 hover:bg-slate-800/30">
+                                            <p className="text-sm font-bold text-white mb-1">{ann.title}</p>
+                                            <p className="text-xs text-slate-400 leading-relaxed">{ann.message}</p>
+                                            <p className="text-[10px] text-slate-600 mt-2 text-right">{new Date(ann.date).toLocaleDateString()}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* TASKS SECTION */}
+                        <div>
+                            <div className="p-3 bg-slate-800/50 font-bold text-white text-xs uppercase flex items-center gap-2">
+                                <Clock size={14} /> Pendências Urgentes
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                                {dueItems.length === 0 ? <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência para hoje/amanhã.</p> : dueItems.map(t => (<div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50"><p className="text-sm text-slate-200">{t.title}</p><p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p></div>))}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -205,7 +231,7 @@ const App = () => {
         
         {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} plans={plans} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
         
-        {activeModule === ModuleType.ADMIN && currentUser?.role === 'ADMIN' && <AdminPanel users={users} plans={plans} coupons={coupons} tutorials={tutorials} isDarkMode={isDarkMode} onUpdateUser={() => fetchDashboardData()} onAddUser={() => fetchDashboardData()} onManagePlan={() => fetchDashboardData()} onManageTutorial={() => fetchDashboardData()} onAddAnnouncement={() => {}} />}
+        {activeModule === ModuleType.ADMIN && currentUser?.role === 'ADMIN' && <AdminPanel users={users} plans={plans} coupons={coupons} tutorials={tutorials} isDarkMode={isDarkMode} onUpdateUser={() => fetchDashboardData()} onAddUser={() => fetchDashboardData()} onManagePlan={() => fetchDashboardData()} onManageTutorial={() => fetchDashboardData()} onAddAnnouncement={async (ann) => { await fetch('/api/admin/announcements', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(ann)}); fetchDashboardData(); }} />}
         
         <button onClick={() => setIsChatOpen(true)} className="fixed bottom-8 right-8 w-14 h-14 bg-gold-600 hover:bg-gold-500 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-transform z-50">
           <Bot className="text-slate-900 w-8 h-8" />
