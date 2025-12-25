@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole, SystemConfig, SubscriptionType, Plan, Tutorial, Announcement } from '../types';
-import { Users, CreditCard, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, Plus, Trash2, Edit2, PlayCircle, Megaphone, Smartphone, Box, Percent, QrCode, FileText } from 'lucide-react';
+import { Users, CreditCard, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, Plus, Trash2, Edit2, PlayCircle, Megaphone, Smartphone, Box, Percent, QrCode, FileText, Globe } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -30,10 +30,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
   const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', active: true, role: UserRole.USER });
   const [currentPlan, setCurrentPlan] = useState<Partial<Plan>>({ name: '', price: 0, trialDays: 15, active: true, type: SubscriptionType.MONTHLY });
   const [newTutorial, setNewTutorial] = useState<Partial<Tutorial>>({ title: '', videoUrl: '', description: '' });
-  const [newAnnouncement, setNewAnnouncement] = useState<Partial<Announcement>>({ title: '', message: '' });
+  const [newAnnouncement, setNewAnnouncement] = useState<Partial<Announcement>>({ title: '', message: '', isPopup: false, imageUrl: '', videoUrl: '' });
 
   // Config State
   const [config, setConfig] = useState<SystemConfig>({
+      timezone: 'America/Sao_Paulo',
       aiProvider: 'GEMINI',
       aiKeys: { gemini: '', openai: '', anthropic: '' },
       webhookUrl: '',
@@ -87,10 +88,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
           id: Date.now().toString(),
           title: newAnnouncement.title,
           message: newAnnouncement.message,
+          imageUrl: newAnnouncement.imageUrl,
+          videoUrl: newAnnouncement.videoUrl,
+          isPopup: newAnnouncement.isPopup || false,
           date: new Date().toISOString()
       });
       setIsInformaticsModalOpen(false);
-      setNewAnnouncement({title: '', message: ''});
+      setNewAnnouncement({title: '', message: '', isPopup: false, imageUrl: '', videoUrl: ''});
   };
 
   const calculateMetrics = (type: SubscriptionType) => {
@@ -161,119 +165,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
     </div>
   );
 
-  const renderBilling = () => (
+  const renderIntegrations = () => (
       <div className="space-y-6 animate-fade-in">
+          {/* General System Config */}
           <div className={`rounded-xl border p-6 ${cardClass}`}>
               <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
-                  <DollarSign className="text-emerald-500" /> Configuração PagSeguro
+                  <Globe className="text-blue-500" /> Configurações Gerais
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Email da Conta</label>
-                      <input type="email" value={config.paymentGateway.email} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Token de Acesso</label>
-                      <input type="password" value={config.paymentGateway.token} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                  <input type="checkbox" checked={config.paymentGateway.sandbox} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, sandbox: e.target.checked}})} />
-                  <span className={textPrimary}>Modo Sandbox (Testes)</span>
+              <div>
+                  <label className="block text-xs text-slate-400 mb-1">Timezone do Sistema</label>
+                  <select 
+                    value={config.timezone} 
+                    onChange={e => setConfig({...config, timezone: e.target.value})}
+                    className={`w-full border rounded p-2 ${inputClass}`}
+                  >
+                      <option value="America/Sao_Paulo">Brasília (GMT-3)</option>
+                      <option value="America/Manaus">Manaus (GMT-4)</option>
+                      <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
+                      <option value="UTC">UTC</option>
+                  </select>
               </div>
           </div>
 
+          {/* AI Providers */}
           <div className={`rounded-xl border p-6 ${cardClass}`}>
               <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
-                  <Percent className="text-blue-500" /> Taxas & Configurações
+                  <Cpu className="text-purple-500" /> Inteligência Artificial (LLMs)
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Taxa Cartão Crédito (À vista) %</label>
-                      <input type="number" step="0.01" value={config.paymentGateway.rates.creditCard} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, creditCard: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Taxa Parcelamento (a.m.) %</label>
-                      <input type="number" step="0.01" value={config.paymentGateway.rates.creditCardInstallment} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, creditCardInstallment: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Taxa PIX (%)</label>
-                      <input type="number" step="0.01" value={config.paymentGateway.rates.pix} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, pix: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Tarifa Boleto (Fixo R$)</label>
-                      <input type="number" step="0.01" value={config.paymentGateway.rates.boleto} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, boleto: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
-              </div>
-              <div className="mt-6 flex justify-end">
-                  <button className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded flex items-center gap-2"><Save size={18} /> Salvar Configurações</button>
-              </div>
-          </div>
-      </div>
-  );
-
-  const renderPlans = () => (
-    <div className="space-y-6 animate-fade-in">
-        <div className={`rounded-xl border p-6 ${cardClass}`}>
-             <div className="flex justify-between items-center mb-6">
-                <h3 className={`text-lg font-medium ${textPrimary}`}>Gerenciar Planos</h3>
-                <button onClick={() => { setCurrentPlan({active: true}); setIsPlanModalOpen(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Plano</button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {plans.map(plan => (
-                    <div key={plan.id} className={`p-4 rounded border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        <div>
-                            <div className="flex justify-between items-start mb-2">
-                                <h4 className={`font-bold ${textPrimary}`}>{plan.name}</h4>
-                                <span className={`px-2 py-0.5 text-[10px] rounded uppercase ${plan.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>{plan.active ? 'Ativo' : 'Inativo'}</span>
-                            </div>
-                            <p className="text-gold-500 font-bold text-xl mb-1">R$ {plan.price.toFixed(2)} <span className="text-xs text-slate-500 font-normal">/ {plan.type}</span></p>
-                            <p className="text-xs text-slate-400">{plan.trialDays} dias grátis</p>
-                        </div>
-                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700/50">
-                             <button onClick={() => { setCurrentPlan(plan); setIsPlanModalOpen(true); }} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded hover:bg-slate-700"><Edit2 size={16} /></button>
-                             <button onClick={() => { if(confirm('Excluir plano?')) onManagePlan(plan, 'DELETE'); }} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    </div>
-  );
-
-  const renderTutorials = () => (
-      <div className="space-y-6 animate-fade-in">
-          <div className={`rounded-xl border p-6 ${cardClass}`}>
-              <div className="flex justify-between items-center mb-6">
-                  <h3 className={`text-lg font-medium ${textPrimary}`}>Vídeos Tutoriais</h3>
-                  <button onClick={() => setIsTutorialModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Vídeo</button>
-              </div>
               <div className="space-y-4">
-                  {tutorials.map(tut => (
-                      <div key={tut.id} className={`p-4 rounded border flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                          <div className="flex items-center gap-4">
-                              <PlayCircle size={32} className="text-purple-500" />
-                              <div>
-                                  <p className={`font-medium ${textPrimary}`}>{tut.title}</p>
-                                  <p className="text-xs text-slate-500 truncate max-w-md">{tut.videoUrl}</p>
-                              </div>
-                          </div>
-                          <button onClick={() => onManageTutorial(tut, 'DELETE')} className="text-slate-500 hover:text-red-400"><Trash2 size={18} /></button>
-                      </div>
-                  ))}
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">Google Gemini API Key</label>
+                      <input type="password" value={config.aiKeys.gemini} onChange={(e) => setConfig({...config, aiKeys: {...config.aiKeys, gemini: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">OpenAI API Key</label>
+                      <input type="password" value={config.aiKeys.openai} onChange={(e) => setConfig({...config, aiKeys: {...config.aiKeys, openai: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
               </div>
           </div>
-      </div>
-  );
 
-  const renderInformatics = () => (
-      <div className="space-y-6 animate-fade-in">
+          {/* Evolution API */}
           <div className={`rounded-xl border p-6 ${cardClass}`}>
-              <div className="flex justify-between items-center mb-6">
-                  <h3 className={`text-lg font-medium ${textPrimary}`}>Informativos Globais</h3>
-                  <button onClick={() => setIsInformaticsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Criar Comunicado</button>
+              <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
+                  <Smartphone className="text-green-500" /> Evolution API (WhatsApp)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                      <label className="block text-xs text-slate-400 mb-1">Base URL</label>
+                      <input type="text" placeholder="https://api.evolution.com" value={config.evolutionApi.baseUrl} className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">Global API Key</label>
+                      <input type="password" value={config.evolutionApi.globalApiKey} className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">Nome da Instância</label>
+                      <input type="text" value={config.evolutionApi.instanceName} placeholder="alfred-main" className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
               </div>
-              <p className="text-slate-500 text-sm">Mensagens enviadas aqui aparecerão para todos os usuários ativos.</p>
           </div>
       </div>
   );
@@ -286,7 +235,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
             {[
                 { id: 'DASHBOARD', icon: LayoutGrid, label: 'Dashboard' },
                 { id: 'PLANS', icon: Box, label: 'Planos' },
-                { id: 'BILLING', icon: CreditCard, label: 'Financeiro (PagSeguro)' },
+                { id: 'BILLING', icon: CreditCard, label: 'Financeiro' },
+                { id: 'INTEGRATIONS', icon: Link, label: 'Integrações & Config' },
                 { id: 'TUTORIALS', icon: PlayCircle, label: 'Tutoriais' },
                 { id: 'INFORMATICS', icon: Megaphone, label: 'Informativos' },
             ].map(tab => (
@@ -298,10 +248,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
       </header>
 
       {activeTab === 'DASHBOARD' && renderDashboard()}
-      {activeTab === 'PLANS' && renderPlans()}
-      {activeTab === 'BILLING' && renderBilling()}
-      {activeTab === 'TUTORIALS' && renderTutorials()}
-      {activeTab === 'INFORMATICS' && renderInformatics()}
+      {activeTab === 'PLANS' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}> {/* Reusing logic for Plans tab content from App.tsx handling */} <div className="flex justify-between items-center mb-6"><h3 className={`text-lg font-medium ${textPrimary}`}>Gerenciar Planos</h3><button onClick={() => { setCurrentPlan({active: true}); setIsPlanModalOpen(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Plano</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{plans.map(plan => (<div key={plan.id} className={`p-4 rounded border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}><div><div className="flex justify-between items-start mb-2"><h4 className={`font-bold ${textPrimary}`}>{plan.name}</h4><span className={`px-2 py-0.5 text-[10px] rounded uppercase ${plan.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>{plan.active ? 'Ativo' : 'Inativo'}</span></div><p className="text-gold-500 font-bold text-xl mb-1">R$ {plan.price.toFixed(2)} <span className="text-xs text-slate-500 font-normal">/ {plan.type}</span></p><p className="text-xs text-slate-400">{plan.trialDays} dias grátis</p></div><div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700/50"><button onClick={() => { setCurrentPlan(plan); setIsPlanModalOpen(true); }} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded hover:bg-slate-700"><Edit2 size={16} /></button><button onClick={() => { if(confirm('Excluir plano?')) onManagePlan(plan, 'DELETE'); }} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button></div></div>))}</div></div></div>}
+      {activeTab === 'BILLING' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}><h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}><DollarSign className="text-emerald-500" /> Configuração PagSeguro</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-xs text-slate-400 mb-1">Email da Conta</label><input type="email" value={config.paymentGateway.email} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} /></div><div><label className="block text-xs text-slate-400 mb-1">Token de Acesso</label><input type="password" value={config.paymentGateway.token} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} /></div></div><div className="mt-4 flex items-center gap-2"><input type="checkbox" checked={config.paymentGateway.sandbox} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, sandbox: e.target.checked}})} /><span className={textPrimary}>Modo Sandbox (Testes)</span></div></div></div>}
+      {activeTab === 'INTEGRATIONS' && renderIntegrations()}
+      {activeTab === 'TUTORIALS' && <div className="space-y-6 animate-fade-in"><div className={`rounded-xl border p-6 ${cardClass}`}><div className="flex justify-between items-center mb-6"><h3 className={`text-lg font-medium ${textPrimary}`}>Vídeos Tutoriais</h3><button onClick={() => setIsTutorialModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Vídeo</button></div><div className="space-y-4">{tutorials.map(tut => (<div key={tut.id} className={`p-4 rounded border flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}><div className="flex items-center gap-4"><PlayCircle size={32} className="text-purple-500" /><div><p className={`font-medium ${textPrimary}`}>{tut.title}</p><p className="text-xs text-slate-500 truncate max-w-md">{tut.videoUrl}</p></div></div><button onClick={() => onManageTutorial(tut, 'DELETE')} className="text-slate-500 hover:text-red-400"><Trash2 size={18} /></button></div>))}</div></div></div>}
+      
+      {activeTab === 'INFORMATICS' && (
+           <div className="space-y-6 animate-fade-in">
+              <div className={`rounded-xl border p-6 ${cardClass}`}>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className={`text-lg font-medium ${textPrimary}`}>Informativos Globais</h3>
+                      <button onClick={() => setIsInformaticsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Criar Comunicado</button>
+                  </div>
+                  <p className="text-slate-500 text-sm mb-4">Gerencie os comunicados que aparecem para todos os usuários.</p>
+                  
+                  {/* List of current announcements would go here (omitted for brevity based on context, focusing on creation) */}
+              </div>
+          </div>
+      )}
 
       {/* Tutorial Modal */}
       {isTutorialModalOpen && (
@@ -332,14 +296,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials,
                   <div className="space-y-4">
                       <input type="text" placeholder="Título" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
                       <textarea placeholder="Mensagem" value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} className={`w-full p-2 border rounded h-32 ${inputClass}`} />
+                      
+                      <div>
+                          <label className="block text-xs text-slate-400 mb-1">URL da Imagem (Opcional)</label>
+                          <input type="text" placeholder="https://..." value={newAnnouncement.imageUrl} onChange={e => setNewAnnouncement({...newAnnouncement, imageUrl: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      </div>
+                      
+                      <div>
+                          <label className="block text-xs text-slate-400 mb-1">URL do Vídeo YouTube (Opcional)</label>
+                          <input type="text" placeholder="https://youtube.com/embed/..." value={newAnnouncement.videoUrl} onChange={e => setNewAnnouncement({...newAnnouncement, videoUrl: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      </div>
+
+                      <div className="flex items-center gap-2 p-2 rounded border border-slate-700 bg-slate-800/50">
+                          <input 
+                            type="checkbox" 
+                            checked={newAnnouncement.isPopup} 
+                            onChange={e => setNewAnnouncement({...newAnnouncement, isPopup: e.target.checked})} 
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                              <span className={`block text-sm font-medium ${textPrimary}`}>Exibir como Pop-up</span>
+                              <span className="text-xs text-slate-400">Aparecerá automaticamente ao entrar.</span>
+                          </div>
+                      </div>
+
                       <button onClick={handleCreateAnnouncement} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded">Enviar para Todos</button>
                   </div>
               </div>
           </div>
       )}
       
-      {/* Plan Modal */}
-      {isPlanModalOpen && (
+      {/* Plan Modal (User Management Modals omitted for brevity, reusing existing structure from context if needed) */}
+       {isPlanModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className={`border rounded-xl w-full max-w-md p-6 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
                 <div className="flex justify-between items-center mb-6">

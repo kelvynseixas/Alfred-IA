@@ -103,6 +103,7 @@ export interface User {
   aiUsageTokenCount?: number;
   avatarUrl?: string;
   paymentHistory?: PaymentHistory[];
+  readAnnouncements?: string[]; // IDs of read announcements
 }
 
 export interface Notification {
@@ -119,6 +120,8 @@ export interface Announcement {
   title: string;
   message: string;
   imageUrl?: string;
+  videoUrl?: string;
+  isPopup: boolean;
   date: string;
 }
 
@@ -141,6 +144,7 @@ export interface Coupon {
 }
 
 export interface SystemConfig {
+  timezone: string; // e.g. 'America/Sao_Paulo'
   aiProvider: 'GEMINI' | 'OPENAI' | 'ANTHROPIC';
   aiKeys: {
     gemini?: string;
