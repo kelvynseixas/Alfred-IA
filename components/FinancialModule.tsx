@@ -89,9 +89,24 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Remove leading zeros
-      let val = e.target.value.replace(/^0+/, '');
-      if (val === '') val = ''; // allow empty
+      let val = e.target.value;
+      
+      // Permite limpar o campo
+      if (val === '') {
+          setNewTrans({ ...newTrans, amount: '' });
+          return;
+      }
+
+      // Regex para validar formato numérico básico (apenas números e ponto)
+      if (!/^\d*\.?\d*$/.test(val)) return;
+
+      // Lógica inteligente para zero à esquerda:
+      // Se tiver mais de 1 caractere, começar com 0 e o segundo caractere NÃO for ponto, remove o zero.
+      // Ex: "05" -> "5". "0." mantem "0.". "0.5" mantem "0.5".
+      if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
+          val = val.replace(/^0+/, '');
+      }
+      
       setNewTrans({ ...newTrans, amount: val });
   };
 
@@ -318,11 +333,12 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Valor (R$)</label>
                             <input 
-                                type="number" 
-                                step="0.01" 
+                                type="text"
+                                inputMode="decimal"
                                 className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none text-white" 
                                 value={newTrans.amount} 
                                 onChange={handleAmountChange}
+                                placeholder="0.00"
                                 required 
                             />
                         </div>
