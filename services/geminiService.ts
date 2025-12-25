@@ -1,9 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { AIResponse } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
 const SYSTEM_INSTRUCTION = `
 Você é o Alfred, um mordomo britânico altamente inteligente, educado, discreto e prestativo.
 Você auxilia o usuário ("Senhor" ou "Senhora") a gerenciar suas Finanças, Tarefas e Listas de Compras.
@@ -26,27 +23,28 @@ Você deve retornar um objeto JSON com a seguinte estrutura:
 formatos de payload:
 - ADD_TRANSACTION: { description: string, amount: number, type: "INCOME"|"EXPENSE"|"INVESTMENT", category: string, date: string (ISO) }
 - ADD_TASK: { title: string, date: string (YYYY-MM-DD), time: string (HH:MM), priority: "low"|"medium"|"high" }
-- ADD_LIST_ITEM: { listName: string, itemName: string, category: string }
 
-Se o usuário quiser apenas conversar, defina o tipo de ação como "NONE" e payload como null.
 Data Atual: ${new Date().toISOString()}
 `;
 
 export const sendMessageToAlfred = async (
   message: string,
-  contextData: any // Current state of the app to give context
+  contextData: any
 ): Promise<AIResponse> => {
   try {
+    const key = sessionStorage.getItem('VITE_GEMINI_KEY');
+    if (!key) {
+        return { reply: "Perdão, Senhor. Minha chave de ativação não foi configurada no Painel Master.", action: { type: 'NONE', payload: null } };
+    }
+
+    const ai = new GoogleGenAI({ apiKey: key });
     const model = 'gemini-3-flash-preview'; 
     
-    // We inject the current app state so Alfred knows what's going on (simulating DB lookups)
     const contextPrompt = `
-      Contexto Atual do App:
-      - Tarefas Recentes: ${JSON.stringify(contextData.tasks.slice(0, 3))}
-      - Transações Recentes: ${JSON.stringify(contextData.transactions.slice(0, 3))}
-      - Listas: ${JSON.stringify(contextData.lists.map((l: any) => l.name))}
-      
-      Mensagem do Usuário: "${message}"
+      Contexto Atual:
+      - Tarefas: ${JSON.stringify(contextData.tasks.slice(0, 5))}
+      - Transações: ${JSON.stringify(contextData.transactions.slice(0, 5))}
+      Mensagem: "${message}"
     `;
 
     const response = await ai.models.generateContent({
@@ -58,18 +56,11 @@ export const sendMessageToAlfred = async (
       }
     });
 
-    const responseText = response.text;
-    if (!responseText) {
-      throw new Error("Empty response from Alfred");
-    }
-
-    const parsedResponse = JSON.parse(responseText) as AIResponse;
-    return parsedResponse;
-
+    return JSON.parse(response.text || '{}') as AIResponse;
   } catch (error) {
-    console.error("Alfred encountered an error:", error);
+    console.error(error);
     return {
-      reply: "Peço perdão, Senhor. Parece que estou com dificuldades em conectar aos meus serviços cognitivos no momento.",
+      reply: "Peço perdão, Senhor. Tive uma falha em meus circuitos de comunicação.",
       action: { type: 'NONE', payload: null }
     };
   }
