@@ -1,30 +1,36 @@
 import React, { useState } from 'react';
-import { User, UserRole, SystemConfig, SubscriptionType, Coupon, Plan } from '../types';
-import { Users, CreditCard, ShieldCheck, Activity, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, MessageSquare, Plus, Trash2, Edit2, Check, Smartphone, Box, AlertTriangle } from 'lucide-react';
+import { User, UserRole, SystemConfig, SubscriptionType, Plan, Tutorial, Announcement } from '../types';
+import { Users, CreditCard, UserPlus, X, Cpu, Link, Palette, LayoutGrid, Save, DollarSign, Plus, Trash2, Edit2, PlayCircle, Megaphone, Smartphone, Box, Percent, QrCode, FileText } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
   plans: Plan[];
+  tutorials: Tutorial[];
   isDarkMode: boolean;
   onUpdateUser: (user: User) => void;
   onAddUser: (user: User) => void;
   onManagePlan: (plan: Plan, action: 'CREATE' | 'UPDATE' | 'DELETE') => void;
+  onManageTutorial: (tut: Tutorial, action: 'CREATE' | 'DELETE') => void;
+  onAddAnnouncement: (ann: Announcement) => void;
 }
 
-type AdminTab = 'DASHBOARD' | 'INTEGRATIONS' | 'PLANS' | 'BILLING';
+type AdminTab = 'DASHBOARD' | 'INTEGRATIONS' | 'PLANS' | 'BILLING' | 'TUTORIALS' | 'INFORMATICS';
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode, onUpdateUser, onAddUser, onManagePlan }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('DASHBOARD');
   
   // Modals
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [manageUser, setManageUser] = useState<User | null>(null);
-  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
+  const [isInformaticsModalOpen, setIsInformaticsModalOpen] = useState(false);
 
-  // Forms State
+  // Forms
   const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', active: true, role: UserRole.USER });
   const [currentPlan, setCurrentPlan] = useState<Partial<Plan>>({ name: '', price: 0, trialDays: 15, active: true, type: SubscriptionType.MONTHLY });
+  const [newTutorial, setNewTutorial] = useState<Partial<Tutorial>>({ title: '', videoUrl: '', description: '' });
+  const [newAnnouncement, setNewAnnouncement] = useState<Partial<Announcement>>({ title: '', message: '' });
 
   // Config State
   const [config, setConfig] = useState<SystemConfig>({
@@ -32,7 +38,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
       aiKeys: { gemini: '', openai: '', anthropic: '' },
       webhookUrl: '',
       evolutionApi: { enabled: true, baseUrl: '', globalApiKey: '', instanceName: '' },
-      paymentGateway: 'ASAAS',
+      paymentGateway: {
+          provider: 'PAGSEGURO',
+          email: '',
+          token: '',
+          sandbox: true,
+          rates: { creditCard: 4.99, creditCardInstallment: 2.99, pix: 0.99, boleto: 3.50 }
+      },
       paymentApiKey: '',
       branding: { primaryColor: '#d97706', secondaryColor: '#1e293b' }
   });
@@ -43,63 +55,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
   const inputClass = isDarkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900';
 
   // --- Handlers ---
-  const handleCreateUser = () => {
-    if (!newUser.name || !newUser.email) return;
-    const user: User = {
-        id: Date.now().toString(),
-        name: newUser.name,
-        email: newUser.email,
-        phone: '',
-        role: newUser.role || UserRole.USER,
-        subscription: SubscriptionType.MONTHLY,
-        active: true,
-        modules: [],
-        since: new Date().getFullYear().toString(),
-        dependents: [],
-        trialEndsAt: new Date(Date.now() + 15 * 86400000).toISOString()
-    };
-    onAddUser(user);
-    setIsAddUserOpen(false);
-    setNewUser({ name: '', email: '', active: true, role: UserRole.USER });
-  };
-
-  const handleUpdateUserStatus = () => {
-      if (!manageUser) return;
-      onUpdateUser({ ...manageUser, active: !manageUser.active });
-      setManageUser(prev => prev ? ({ ...prev, active: !prev.active }) : null);
-  };
-
-  const handleChangeUserPlan = (sub: SubscriptionType) => {
-      if (!manageUser) return;
-      onUpdateUser({ ...manageUser, subscription: sub });
-      setManageUser(prev => prev ? ({ ...prev, subscription: sub }) : null);
-  };
-
   const handleSavePlan = () => {
       if (!currentPlan.name || !currentPlan.price) return;
-      const planToSave: Plan = {
+      onManagePlan({
           id: currentPlan.id || Date.now().toString(),
           name: currentPlan.name,
           type: currentPlan.type || SubscriptionType.MONTHLY,
           price: Number(currentPlan.price),
           trialDays: Number(currentPlan.trialDays),
           active: currentPlan.active ?? true
-      };
-      onManagePlan(planToSave, currentPlan.id ? 'UPDATE' : 'CREATE');
+      }, currentPlan.id ? 'UPDATE' : 'CREATE');
       setIsPlanModalOpen(false);
       setCurrentPlan({ name: '', price: 0, trialDays: 15, active: true });
   };
 
-  const handleDeletePlan = (p: Plan) => {
-      if (confirm('Tem certeza que deseja excluir este plano?')) {
-          onManagePlan(p, 'DELETE');
-      }
+  const handleCreateTutorial = () => {
+      if(!newTutorial.title || !newTutorial.videoUrl) return;
+      onManageTutorial({
+          id: Date.now().toString(),
+          title: newTutorial.title,
+          videoUrl: newTutorial.videoUrl,
+          description: newTutorial.description || ''
+      }, 'CREATE');
+      setIsTutorialModalOpen(false);
+      setNewTutorial({title: '', videoUrl: '', description: ''});
+  };
+
+  const handleCreateAnnouncement = () => {
+      if(!newAnnouncement.title || !newAnnouncement.message) return;
+      onAddAnnouncement({
+          id: Date.now().toString(),
+          title: newAnnouncement.title,
+          message: newAnnouncement.message,
+          date: new Date().toISOString()
+      });
+      setIsInformaticsModalOpen(false);
+      setNewAnnouncement({title: '', message: ''});
   };
 
   const calculateMetrics = (type: SubscriptionType) => {
       const filtered = users.filter(u => u.subscription === type);
       const count = filtered.length;
-      // Find current price for this type (approximate based on plans)
       const plan = plans.find(p => p.type === type);
       const price = plan ? plan.price : 0;
       return { count, total: count * price };
@@ -114,34 +110,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
     <div className="space-y-6 animate-fade-in">
         {/* Subscription Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className={`p-4 rounded-lg border ${cardClass}`}>
-                <p className="text-xs text-slate-500 uppercase mb-1">Mensal</p>
-                <div className="flex justify-between items-end">
-                    <span className={`text-2xl font-bold ${textPrimary}`}>{metricsMonthly.count}x</span>
-                    <span className="text-emerald-500 font-bold">R$ {metricsMonthly.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+            {[metricsMonthly, metricsQuarterly, metricsSemiannual, metricsAnnual].map((m, i) => (
+                <div key={i} className={`p-4 rounded-lg border ${cardClass}`}>
+                    <p className="text-xs text-slate-500 uppercase mb-1">{i === 0 ? 'Mensal' : i === 1 ? 'Trimestral' : i === 2 ? 'Semestral' : 'Anual'}</p>
+                    <div className="flex justify-between items-end">
+                        <span className={`text-2xl font-bold ${textPrimary}`}>{m.count}x</span>
+                        <span className="text-emerald-500 font-bold">R$ {m.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
                 </div>
-            </div>
-            <div className={`p-4 rounded-lg border ${cardClass}`}>
-                <p className="text-xs text-slate-500 uppercase mb-1">Trimestral</p>
-                <div className="flex justify-between items-end">
-                    <span className={`text-2xl font-bold ${textPrimary}`}>{metricsQuarterly.count}x</span>
-                    <span className="text-emerald-500 font-bold">R$ {metricsQuarterly.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                </div>
-            </div>
-            <div className={`p-4 rounded-lg border ${cardClass}`}>
-                <p className="text-xs text-slate-500 uppercase mb-1">Semestral</p>
-                <div className="flex justify-between items-end">
-                    <span className={`text-2xl font-bold ${textPrimary}`}>{metricsSemiannual.count}x</span>
-                    <span className="text-emerald-500 font-bold">R$ {metricsSemiannual.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                </div>
-            </div>
-            <div className={`p-4 rounded-lg border ${cardClass}`}>
-                <p className="text-xs text-slate-500 uppercase mb-1">Anual</p>
-                <div className="flex justify-between items-end">
-                    <span className={`text-2xl font-bold ${textPrimary}`}>{metricsAnnual.count}x</span>
-                    <span className="text-emerald-500 font-bold">R$ {metricsAnnual.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                </div>
-            </div>
+            ))}
         </div>
 
         <div className={`rounded-xl border overflow-hidden ${cardClass}`}>
@@ -184,61 +161,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
     </div>
   );
 
-  const renderIntegrations = () => (
+  const renderBilling = () => (
       <div className="space-y-6 animate-fade-in">
-          {/* AI Providers */}
           <div className={`rounded-xl border p-6 ${cardClass}`}>
               <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
-                  <Cpu className="text-purple-500" /> Inteligência Artificial (LLMs)
+                  <DollarSign className="text-emerald-500" /> Configuração PagSeguro
               </h3>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                      <label className="block text-xs text-slate-400 mb-1">Google Gemini API Key</label>
-                      <input type="password" value={config.aiKeys.gemini} onChange={(e) => setConfig({...config, aiKeys: {...config.aiKeys, gemini: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
+                      <label className="block text-xs text-slate-400 mb-1">Email da Conta</label>
+                      <input type="email" value={config.paymentGateway.email} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, email: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
                   </div>
                   <div>
-                      <label className="block text-xs text-slate-400 mb-1">OpenAI API Key</label>
-                      <input type="password" value={config.aiKeys.openai} onChange={(e) => setConfig({...config, aiKeys: {...config.aiKeys, openai: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
+                      <label className="block text-xs text-slate-400 mb-1">Token de Acesso</label>
+                      <input type="password" value={config.paymentGateway.token} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, token: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
                   </div>
-                  <div>
-                      <label className="block text-xs text-slate-400 mb-1">Anthropic API Key</label>
-                      <input type="password" value={config.aiKeys.anthropic} onChange={(e) => setConfig({...config, aiKeys: {...config.aiKeys, anthropic: e.target.value}})} className={`w-full border rounded p-2 ${inputClass}`} />
-                  </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                  <input type="checkbox" checked={config.paymentGateway.sandbox} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, sandbox: e.target.checked}})} />
+                  <span className={textPrimary}>Modo Sandbox (Testes)</span>
               </div>
           </div>
 
-          {/* Evolution API */}
           <div className={`rounded-xl border p-6 ${cardClass}`}>
               <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
-                  <Smartphone className="text-green-500" /> Evolution API (WhatsApp)
+                  <Percent className="text-blue-500" /> Taxas & Configurações
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                      <label className="block text-xs text-slate-400 mb-1">Base URL</label>
-                      <input type="text" placeholder="https://api.evolution.com" value={config.evolutionApi.baseUrl} className={`w-full border rounded p-2 ${inputClass}`} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">Taxa Cartão Crédito (À vista) %</label>
+                      <input type="number" step="0.01" value={config.paymentGateway.rates.creditCard} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, creditCard: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
                   </div>
                   <div>
-                      <label className="block text-xs text-slate-400 mb-1">Global API Key</label>
-                      <input type="password" value={config.evolutionApi.globalApiKey} className={`w-full border rounded p-2 ${inputClass}`} />
+                      <label className="block text-xs text-slate-400 mb-1">Taxa Parcelamento (a.m.) %</label>
+                      <input type="number" step="0.01" value={config.paymentGateway.rates.creditCardInstallment} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, creditCardInstallment: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
                   </div>
                   <div>
-                      <label className="block text-xs text-slate-400 mb-1">Nome da Instância</label>
-                      <input type="text" value={config.evolutionApi.instanceName} placeholder="alfred-main" className={`w-full border rounded p-2 ${inputClass}`} />
+                      <label className="block text-xs text-slate-400 mb-1">Taxa PIX (%)</label>
+                      <input type="number" step="0.01" value={config.paymentGateway.rates.pix} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, pix: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
+                  </div>
+                  <div>
+                      <label className="block text-xs text-slate-400 mb-1">Tarifa Boleto (Fixo R$)</label>
+                      <input type="number" step="0.01" value={config.paymentGateway.rates.boleto} onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, rates: {...config.paymentGateway.rates, boleto: Number(e.target.value)}}})} className={`w-full border rounded p-2 ${inputClass}`} />
                   </div>
               </div>
-          </div>
-
-          {/* N8N / Webhooks */}
-          <div className={`rounded-xl border p-6 ${cardClass}`}>
-              <h3 className={`text-lg font-medium mb-4 flex items-center gap-2 ${textPrimary}`}>
-                  <Link className="text-blue-500" /> Automação (N8N / Webhook)
-              </h3>
-              <div>
-                  <label className="block text-xs text-slate-400 mb-1">Webhook URL (Receber eventos)</label>
-                  <input type="text" value={config.webhookUrl} placeholder="https://n8n.seu-server.com/webhook/..." className={`w-full border rounded p-2 ${inputClass}`} />
-              </div>
-              <div className="mt-4 flex justify-end">
-                   <button className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm">Salvar Configurações</button>
+              <div className="mt-6 flex justify-end">
+                  <button className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded flex items-center gap-2"><Save size={18} /> Salvar Configurações</button>
               </div>
           </div>
       </div>
@@ -251,7 +219,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
                 <h3 className={`text-lg font-medium ${textPrimary}`}>Gerenciar Planos</h3>
                 <button onClick={() => { setCurrentPlan({active: true}); setIsPlanModalOpen(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Plano</button>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {plans.map(plan => (
                     <div key={plan.id} className={`p-4 rounded border flex flex-col justify-between ${isDarkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -265,13 +232,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
                         </div>
                         <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-700/50">
                              <button onClick={() => { setCurrentPlan(plan); setIsPlanModalOpen(true); }} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded hover:bg-slate-700"><Edit2 size={16} /></button>
-                             <button onClick={() => handleDeletePlan(plan)} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button>
+                             <button onClick={() => { if(confirm('Excluir plano?')) onManagePlan(plan, 'DELETE'); }} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 rounded hover:bg-slate-700"><Trash2 size={16} /></button>
                         </div>
                     </div>
                 ))}
             </div>
         </div>
     </div>
+  );
+
+  const renderTutorials = () => (
+      <div className="space-y-6 animate-fade-in">
+          <div className={`rounded-xl border p-6 ${cardClass}`}>
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className={`text-lg font-medium ${textPrimary}`}>Vídeos Tutoriais</h3>
+                  <button onClick={() => setIsTutorialModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Novo Vídeo</button>
+              </div>
+              <div className="space-y-4">
+                  {tutorials.map(tut => (
+                      <div key={tut.id} className={`p-4 rounded border flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                          <div className="flex items-center gap-4">
+                              <PlayCircle size={32} className="text-purple-500" />
+                              <div>
+                                  <p className={`font-medium ${textPrimary}`}>{tut.title}</p>
+                                  <p className="text-xs text-slate-500 truncate max-w-md">{tut.videoUrl}</p>
+                              </div>
+                          </div>
+                          <button onClick={() => onManageTutorial(tut, 'DELETE')} className="text-slate-500 hover:text-red-400"><Trash2 size={18} /></button>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </div>
+  );
+
+  const renderInformatics = () => (
+      <div className="space-y-6 animate-fade-in">
+          <div className={`rounded-xl border p-6 ${cardClass}`}>
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className={`text-lg font-medium ${textPrimary}`}>Informativos Globais</h3>
+                  <button onClick={() => setIsInformaticsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2"><Plus size={16} /> Criar Comunicado</button>
+              </div>
+              <p className="text-slate-500 text-sm">Mensagens enviadas aqui aparecerão para todos os usuários ativos.</p>
+          </div>
+      </div>
   );
 
   return (
@@ -282,8 +286,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
             {[
                 { id: 'DASHBOARD', icon: LayoutGrid, label: 'Dashboard' },
                 { id: 'PLANS', icon: Box, label: 'Planos' },
-                { id: 'INTEGRATIONS', icon: Link, label: 'Integrações & IA' },
-                { id: 'BILLING', icon: CreditCard, label: 'Financeiro' },
+                { id: 'BILLING', icon: CreditCard, label: 'Financeiro (PagSeguro)' },
+                { id: 'TUTORIALS', icon: PlayCircle, label: 'Tutoriais' },
+                { id: 'INFORMATICS', icon: Megaphone, label: 'Informativos' },
             ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id as AdminTab)} className={`pb-3 flex items-center gap-2 text-sm font-bold border-b-2 transition-all ${activeTab === tab.id ? 'border-purple-500 text-purple-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
                     <tab.icon size={16} /> {tab.label}
@@ -294,72 +299,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, isDarkMode
 
       {activeTab === 'DASHBOARD' && renderDashboard()}
       {activeTab === 'PLANS' && renderPlans()}
-      {activeTab === 'INTEGRATIONS' && renderIntegrations()}
-      {activeTab === 'BILLING' && <div className={`p-8 rounded-xl border text-center ${cardClass} text-slate-500`}>Configurações de Gateway e Cupons.</div>}
+      {activeTab === 'BILLING' && renderBilling()}
+      {activeTab === 'TUTORIALS' && renderTutorials()}
+      {activeTab === 'INFORMATICS' && renderInformatics()}
 
-      {/* User Management Modal */}
-      {manageUser && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className={`border rounded-2xl w-full max-w-lg p-8 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className={`text-2xl font-serif ${textPrimary}`}>Gestão de Cliente</h3>
-                    <button onClick={() => setManageUser(null)}><X className="text-slate-400 hover:text-red-500" /></button>
-                </div>
-                
-                <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                         <div className={`p-3 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                            <p className="text-xs text-slate-500 uppercase">Status</p>
-                            <p className={manageUser.active ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>{manageUser.active ? 'ATIVO' : 'SUSPENSO'}</p>
-                        </div>
-                        <div className={`p-3 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                            <p className="text-xs text-slate-500 uppercase">Plano Atual</p>
-                            <p className={textPrimary}>{manageUser.subscription}</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                         <label className="block text-xs text-slate-500 uppercase">Alterar Plano</label>
-                         <select 
-                            value={manageUser.subscription} 
-                            onChange={(e) => handleChangeUserPlan(e.target.value as SubscriptionType)}
-                            className={`w-full p-3 rounded border outline-none ${inputClass}`}
-                        >
-                            <option value={SubscriptionType.MONTHLY}>Mensal</option>
-                            <option value={SubscriptionType.QUARTERLY}>Trimestral</option>
-                            <option value={SubscriptionType.SEMIANNUAL}>Semestral</option>
-                            <option value={SubscriptionType.ANNUAL}>Anual</option>
-                         </select>
-
-                         <button 
-                            onClick={handleUpdateUserStatus}
-                            className={`w-full border py-3 rounded font-bold mt-4 transition-colors ${manageUser.active ? 'border-red-500/50 text-red-500 hover:bg-red-500/10' : 'border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/10'}`}
-                         >
-                            {manageUser.active ? 'Suspender Acesso' : 'Reativar Acesso'}
-                         </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Add User Modal */}
-      {isAddUserOpen && (
+      {/* Tutorial Modal */}
+      {isTutorialModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className={`border rounded-xl w-full max-w-md p-6 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className={`text-xl font-serif ${textPrimary}`}>Novo Cliente</h3>
-                    <button onClick={() => setIsAddUserOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
-                </div>
-                <div className="space-y-4">
-                    <input type="text" placeholder="Nome Completo" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
-                    <input type="email" placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
-                    <button onClick={handleCreateUser} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded">Criar Cliente</button>
-                </div>
-            </div>
-        </div>
+              <div className={`border rounded-xl w-full max-w-md p-6 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className={`text-xl font-serif ${textPrimary}`}>Novo Tutorial</h3>
+                      <button onClick={() => setIsTutorialModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                  </div>
+                  <div className="space-y-4">
+                      <input type="text" placeholder="Título do Vídeo" value={newTutorial.title} onChange={e => setNewTutorial({...newTutorial, title: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      <input type="text" placeholder="URL do Vídeo (YouTube Embed)" value={newTutorial.videoUrl} onChange={e => setNewTutorial({...newTutorial, videoUrl: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      <textarea placeholder="Descrição" value={newTutorial.description} onChange={e => setNewTutorial({...newTutorial, description: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      <button onClick={handleCreateTutorial} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded">Cadastrar</button>
+                  </div>
+              </div>
+          </div>
       )}
 
+      {/* Announcement Modal */}
+      {isInformaticsModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className={`border rounded-xl w-full max-w-md p-6 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className={`text-xl font-serif ${textPrimary}`}>Novo Informativo</h3>
+                      <button onClick={() => setIsInformaticsModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                  </div>
+                  <div className="space-y-4">
+                      <input type="text" placeholder="Título" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} className={`w-full p-2 border rounded ${inputClass}`} />
+                      <textarea placeholder="Mensagem" value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} className={`w-full p-2 border rounded h-32 ${inputClass}`} />
+                      <button onClick={handleCreateAnnouncement} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded">Enviar para Todos</button>
+                  </div>
+              </div>
+          </div>
+      )}
+      
       {/* Plan Modal */}
       {isPlanModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

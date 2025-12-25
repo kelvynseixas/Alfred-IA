@@ -12,7 +12,9 @@ import {
   SubscriptionType,
   AIActionType,
   Notification,
-  Plan
+  Plan,
+  Tutorial,
+  Announcement
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
 import { TaskModule } from './components/TaskModule';
@@ -21,7 +23,8 @@ import { AdminPanel } from './components/AdminPanel';
 import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, Shield } from 'lucide-react';
+import { TutorialModule } from './components/TutorialModule';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, Bell, Moon, Sun, PlayCircle, Info } from 'lucide-react';
 
 const App = () => {
   // --- Auth State ---
@@ -33,16 +36,24 @@ const App = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showInformatics, setShowInformatics] = useState(false);
 
-  // --- Database Mock Data (Postgres Ready Structure) ---
+  // --- Mock Data ---
   const [notifications, setNotifications] = useState<Notification[]>([
     { id: 'n1', title: 'Conta a Vencer', message: 'Energia Elétrica vence amanhã.', type: 'FINANCE', read: false, date: new Date().toISOString() }
   ]);
 
-  // Default Plans
+  const [announcements, setAnnouncements] = useState<Announcement[]>([
+    { id: 'a1', title: 'Manutenção Programada', message: 'O sistema passará por atualização na madrugada de domingo.', date: new Date().toISOString() }
+  ]);
+
+  const [tutorials, setTutorials] = useState<Tutorial[]>([
+    { id: 't1', title: 'Primeiros Passos', description: 'Como configurar sua conta e adicionar tarefas.', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }
+  ]);
+
   const [plans, setPlans] = useState<Plan[]>([
     { id: 'p1', name: 'Mensal Básico', type: SubscriptionType.MONTHLY, price: 39.90, trialDays: 15, active: true },
-    { id: 'p2', name: 'Semestral Econômico', type: SubscriptionType.SEMIANNUAL, price: 199.50, trialDays: 15, active: true }, // ~33.25/mo
+    { id: 'p2', name: 'Semestral Econômico', type: SubscriptionType.SEMIANNUAL, price: 199.50, trialDays: 15, active: true },
     { id: 'p3', name: 'Trimestral Flex', type: SubscriptionType.QUARTERLY, price: 119.70, trialDays: 7, active: true },
     { id: 'p4', name: 'Anual Premium', type: SubscriptionType.ANNUAL, price: 399.00, trialDays: 30, active: true }
   ]);
@@ -70,11 +81,11 @@ const App = () => {
       active: true, 
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS, ModuleType.ADMIN], 
       since: '2024', 
-      dependents: [] 
+      paymentHistory: []
     }
   ]);
 
-  // --- Auth Handlers ---
+  // --- Handlers ---
   const handleLogin = (email: string, pass: string) => {
     if (email === 'maisalem.md@gmail.com' && pass === 'Alfred@1992') {
       setCurrentUser(users[0]);
@@ -83,10 +94,7 @@ const App = () => {
     }
     const user = users.find(u => u.email === email);
     if (user) {
-      if(!user.active) {
-        alert("Acesso suspenso. Contate o administrador.");
-        return;
-      }
+      if(!user.active) { alert("Acesso suspenso."); return; }
       setCurrentUser(user);
       setIsAuthenticated(true);
     } else {
@@ -97,7 +105,6 @@ const App = () => {
   const handleRegister = (name: string, email: string, phone: string, subscription: SubscriptionType) => {
     const selectedPlan = plans.find(p => p.type === subscription);
     const trialDays = selectedPlan ? selectedPlan.trialDays : 15;
-
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -105,11 +112,11 @@ const App = () => {
       phone,
       role: UserRole.USER,
       subscription,
-      trialEndsAt: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString(),
+      trialEndsAt: new Date(Date.now() + trialDays * 86400000).toISOString(),
       active: true,
       modules: [ModuleType.FINANCE, ModuleType.TASKS, ModuleType.LISTS],
       since: new Date().getFullYear().toString(),
-      dependents: []
+      paymentHistory: []
     };
     setUsers([...users, newUser]);
     setCurrentUser(newUser);
@@ -122,93 +129,51 @@ const App = () => {
     setActiveModule(ModuleType.FINANCE);
   };
 
-  // --- Data Handlers (Mapped to DB Actions) ---
-  const handleToggleTask = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE } : t));
-  const handleToggleListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.map(i => i.id === iId ? { ...i, status: i.status === ItemStatus.DONE ? ItemStatus.PENDING : ItemStatus.DONE } : i) } : l));
-  const handleDeleteListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.filter(i => i.id !== iId) } : l));
-  
-  const handleAddTransaction = (t: Omit<Transaction, 'id'>) => setTransactions(prev => [...prev, { ...t, id: Date.now().toString() }]);
-  const handleDeleteTransaction = (id: string) => setTransactions(prev => prev.filter(t => t.id !== id));
-  
-  const handleAddTask = (t: Omit<Task, 'id'>) => setTasks(prev => [...prev, { ...t, id: Date.now().toString() }]);
-
-  // --- Admin Actions Handlers ---
+  // --- CRUD Handlers ---
   const handleUpdateUser = (updatedUser: User) => {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    if (currentUser?.id === updatedUser.id) {
-        setCurrentUser(updatedUser);
-    }
+    if (currentUser?.id === updatedUser.id) setCurrentUser(updatedUser);
   };
-
-  const handleAddUser = (user: User) => {
-    setUsers(prev => [...prev, user]);
-  };
-
+  const handleAddUser = (user: User) => setUsers(prev => [...prev, user]);
+  
   const handleManagePlan = (plan: Plan, action: 'CREATE' | 'UPDATE' | 'DELETE') => {
       if (action === 'CREATE') setPlans(prev => [...prev, plan]);
       if (action === 'UPDATE') setPlans(prev => prev.map(p => p.id === plan.id ? plan : p));
       if (action === 'DELETE') setPlans(prev => prev.filter(p => p.id !== plan.id));
   };
 
-  // --- AI Action Logic (Fixed) ---
+  const handleManageTutorial = (tut: Tutorial, action: 'CREATE' | 'DELETE') => {
+      if(action === 'CREATE') setTutorials(prev => [...prev, tut]);
+      if(action === 'DELETE') setTutorials(prev => prev.filter(t => t.id !== tut.id));
+  };
+
+  const handleAddAnnouncement = (ann: Announcement) => setAnnouncements(prev => [ann, ...prev]);
+
+  const handleToggleTask = (id: string) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE } : t));
+  const handleToggleListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.map(i => i.id === iId ? { ...i, status: i.status === ItemStatus.DONE ? ItemStatus.PENDING : ItemStatus.DONE } : i) } : l));
+  const handleDeleteListItem = (lId: string, iId: string) => setLists(prev => prev.map(l => l.id === lId ? { ...l, items: l.items.filter(i => i.id !== iId) } : l));
+  const handleAddList = (name: string) => setLists(prev => [...prev, { id: Date.now().toString(), name, items: [] }]);
+  const handleAddTransaction = (t: Omit<Transaction, 'id'>) => setTransactions(prev => [...prev, { ...t, id: Date.now().toString() }]);
+  const handleDeleteTransaction = (id: string) => setTransactions(prev => prev.filter(t => t.id !== id));
+  const handleAddTask = (t: Omit<Task, 'id'>) => setTasks(prev => [...prev, { ...t, id: Date.now().toString() }]);
+
   const handleAIAction = (action: { type: AIActionType, payload: any }) => {
-    console.log("AI Action Received:", action);
-
-    if (action.type === 'ADD_TRANSACTION') {
-        handleAddTransaction({
-            description: action.payload.description || 'Transação IA',
-            amount: Number(action.payload.amount),
-            type: action.payload.type || TransactionType.EXPENSE,
-            category: action.payload.category || 'Geral',
-            date: action.payload.date || new Date().toISOString()
-        });
-    }
-    
-    if (action.type === 'ADD_TASK') {
-        handleAddTask({
-            title: action.payload.title,
-            date: action.payload.date || new Date().toISOString(),
-            time: action.payload.time,
-            priority: action.payload.priority || 'medium',
-            status: TaskStatus.PENDING
-        });
-    }
-
-    if (action.type === 'UPDATE_TASK') {
-        // Simplified update logic (title match)
-        setTasks(prev => prev.map(t => 
-            t.title.toLowerCase().includes(action.payload.searchTitle?.toLowerCase()) 
-            ? { ...t, ...action.payload.updates } 
-            : t
-        ));
-    }
-
+    if (action.type === 'ADD_TRANSACTION') handleAddTransaction({ ...action.payload, id: Date.now().toString() });
+    if (action.type === 'ADD_TASK') handleAddTask({ ...action.payload, status: TaskStatus.PENDING });
     if (action.type === 'ADD_LIST_ITEM') {
-        const listName = action.payload.listName || 'Geral';
-        const itemName = action.payload.itemName;
-        
+        const { listName, itemName } = action.payload;
         setLists(prev => {
-            const listExists = prev.find(l => l.name.toLowerCase() === listName.toLowerCase());
-            
-            if (listExists) {
-                return prev.map(l => l.id === listExists.id ? {
-                    ...l,
-                    items: [...l.items, { id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }]
-                } : l);
-            } else {
-                // Create new list if not exists
-                return [...prev, {
-                    id: Date.now().toString(),
-                    name: listName,
-                    items: [{ id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }]
-                }];
+            const exists = prev.find(l => l.name.toLowerCase() === listName.toLowerCase());
+            if (exists) {
+                return prev.map(l => l.id === exists.id ? { ...l, items: [...l.items, { id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }] } : l);
             }
+            return [...prev, { id: Date.now().toString(), name: listName, items: [{ id: Date.now().toString(), name: itemName, category: 'Geral', status: ItemStatus.PENDING }] }];
         });
     }
   };
 
   if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} onRegister={handleRegister} isDarkMode={isDarkMode} />;
+    return <LoginPage onLogin={handleLogin} onRegister={handleRegister} plans={plans} isDarkMode={isDarkMode} />;
   }
 
   return (
@@ -239,6 +204,7 @@ const App = () => {
                { id: ModuleType.FINANCE, icon: LayoutDashboard, label: 'Financeiro' },
                { id: ModuleType.TASKS, icon: CheckSquare, label: 'Tarefas' },
                { id: ModuleType.LISTS, icon: List, label: 'Listas' },
+               { id: ModuleType.TUTORIALS, icon: PlayCircle, label: 'Tutoriais' },
                { id: ModuleType.PROFILE, icon: UserIcon, label: 'Meu Perfil' },
              ].map((item) => (
                 <button key={item.id} onClick={() => setActiveModule(item.id)}
@@ -279,6 +245,28 @@ const App = () => {
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         <header className={`h-16 border-b flex items-center justify-end px-8 gap-4 ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white/50 border-slate-200'}`}>
+            {/* Informatics Dropdown */}
+            <div className="relative">
+                <button onClick={() => setShowInformatics(!showInformatics)} className={`p-2 rounded-full relative ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}>
+                    <Info size={20} />
+                    {announcements.length > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-slate-900"></span>}
+                </button>
+                {showInformatics && (
+                    <div className={`absolute right-0 mt-2 w-80 rounded-xl shadow-2xl border overflow-hidden z-50 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <div className={`p-3 border-b font-medium text-sm ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-100 text-slate-800'}`}>Informativos</div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {announcements.length === 0 ? <p className="p-4 text-center text-xs text-slate-500">Sem comunicados.</p> : announcements.map(a => (
+                                <div key={a.id} className={`p-3 border-b text-sm last:border-0 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-slate-100 hover:bg-slate-50'}`}>
+                                    <p className={`font-medium mb-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{a.title}</p>
+                                    <p className="text-xs text-slate-400">{a.message}</p>
+                                    <p className="text-[10px] text-slate-600 mt-2 text-right">{new Date(a.date).toLocaleDateString()}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <button onClick={() => setShowNotifications(!showNotifications)} className={`p-2 rounded-full relative ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}>
                 <Bell size={20} />
                 {notifications.some(n => !n.read) && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-900"></span>}
@@ -289,15 +277,13 @@ const App = () => {
           <div className="max-w-7xl mx-auto pb-20">
             {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={handleAddTransaction} onDeleteTransaction={handleDeleteTransaction} isDarkMode={isDarkMode} />}
             {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={handleToggleTask} onAddTask={handleAddTask} />}
-            {activeModule === ModuleType.LISTS && <ListModule lists={lists} onToggleItem={handleToggleListItem} onDeleteItem={handleDeleteListItem} />}
+            {activeModule === ModuleType.LISTS && <ListModule lists={lists} onToggleItem={handleToggleListItem} onDeleteItem={handleDeleteListItem} onAddList={handleAddList} />}
+            {activeModule === ModuleType.TUTORIALS && <TutorialModule tutorials={tutorials} isDarkMode={isDarkMode} />}
             {activeModule === ModuleType.ADMIN && currentUser?.role === UserRole.ADMIN && (
                 <AdminPanel 
-                    users={users} 
-                    plans={plans}
-                    isDarkMode={isDarkMode} 
-                    onUpdateUser={handleUpdateUser}
-                    onAddUser={handleAddUser}
-                    onManagePlan={handleManagePlan}
+                    users={users} plans={plans} tutorials={tutorials} isDarkMode={isDarkMode} 
+                    onUpdateUser={handleUpdateUser} onAddUser={handleAddUser} onManagePlan={handleManagePlan}
+                    onManageTutorial={handleManageTutorial} onAddAnnouncement={handleAddAnnouncement}
                 />
             )}
             {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
@@ -306,7 +292,7 @@ const App = () => {
 
         {!isChatOpen && (
             <button onClick={() => setIsChatOpen(true)} className="absolute bottom-8 right-8 w-16 h-16 bg-slate-900 border-2 border-gold-600 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform z-30 group">
-                <Bot className="w-8 h-8 text-gold-500 group-hover:animate-bounce" />
+                <UserIcon className="w-8 h-8 text-gold-500 group-hover:animate-bounce" />
             </button>
         )}
         <AlfredChat appContext={{ transactions, tasks, lists }} onAIAction={handleAIAction} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />

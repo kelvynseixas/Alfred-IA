@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ListGroup, ItemStatus } from '../types';
-import { CheckSquare, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { CheckSquare, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 
 interface ListModuleProps {
   lists: ListGroup[];
   onToggleItem: (listId: string, itemId: string) => void;
   onDeleteItem: (listId: string, itemId: string) => void;
+  onAddList: (name: string) => void;
 }
 
-export const ListModule: React.FC<ListModuleProps> = ({ lists, onToggleItem, onDeleteItem }) => {
+export const ListModule: React.FC<ListModuleProps> = ({ lists, onToggleItem, onDeleteItem, onAddList }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
+
+  const handleCreate = () => {
+      if(!newListName) return;
+      onAddList(newListName);
+      setNewListName('');
+      setIsModalOpen(false);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
         <header className="mb-8 flex justify-between items-end">
@@ -16,7 +27,7 @@ export const ListModule: React.FC<ListModuleProps> = ({ lists, onToggleItem, onD
             <h2 className="text-3xl font-serif text-white">Inventário & Listas</h2>
             <p className="text-slate-400">Garantindo que a propriedade esteja bem abastecida.</p>
           </div>
-          <button className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
+          <button onClick={() => setIsModalOpen(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
             <Plus className="w-4 h-4" /> Nova Lista
           </button>
         </header>
@@ -77,6 +88,24 @@ export const ListModule: React.FC<ListModuleProps> = ({ lists, onToggleItem, onD
                 </div>
             ))}
         </div>
+
+        {isModalOpen && (
+             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm p-6 shadow-2xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-serif text-white">Nova Lista</h3>
+                        <button onClick={() => setIsModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                    </div>
+                    <input 
+                        className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white mb-4"
+                        placeholder="Nome da Lista (ex: Material Escolar)"
+                        value={newListName}
+                        onChange={e => setNewListName(e.target.value)}
+                    />
+                    <button onClick={handleCreate} className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-2 rounded">Criar Lista</button>
+                </div>
+             </div>
+        )}
     </div>
   );
 };

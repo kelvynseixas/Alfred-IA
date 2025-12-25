@@ -4,19 +4,19 @@ export enum ModuleType {
   LISTS = 'LISTS',
   ADMIN = 'ADMIN',
   CHAT = 'CHAT',
-  PROFILE = 'PROFILE'
+  PROFILE = 'PROFILE',
+  TUTORIALS = 'TUTORIALS'
 }
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  USER = 'USER',
-  DEPENDENT = 'DEPENDENT'
+  USER = 'USER'
 }
 
 export enum SubscriptionType {
   MONTHLY = 'MONTHLY',
-  QUARTERLY = 'QUARTERLY', // Trimestral
-  SEMIANNUAL = 'SEMIANNUAL', // Semestral
+  QUARTERLY = 'QUARTERLY',
+  SEMIANNUAL = 'SEMIANNUAL',
   ANNUAL = 'ANNUAL'
 }
 
@@ -36,12 +36,12 @@ export enum TransactionType {
 }
 
 export interface Transaction {
-  id: string; // UUID in Postgres
+  id: string;
   description: string;
   amount: number;
   type: TransactionType;
   category: string;
-  date: string; // ISO Timestamp
+  date: string;
 }
 
 export enum TaskStatus {
@@ -52,9 +52,9 @@ export enum TaskStatus {
 }
 
 export interface Task {
-  id: string; // UUID in Postgres
+  id: string;
   title: string;
-  date: string; // ISO date string
+  date: string;
   time?: string;
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
@@ -74,36 +74,35 @@ export interface ListItem {
 }
 
 export interface ListGroup {
-  id: string; // UUID in Postgres
+  id: string;
   name: string;
   items: ListItem[];
 }
 
-export interface Dependent {
+export interface PaymentHistory {
   id: string;
-  name: string;
-  relation: string;
-  email: string;
-  phone: string;
-  password?: string;
-  avatarUrl?: string;
+  date: string;
+  amount: number;
+  method: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+  status: 'PAID' | 'PENDING' | 'FAILED';
+  invoiceUrl?: string;
 }
 
 export interface User {
-  id: string; // UUID in Postgres
+  id: string;
   name: string;
   email: string;
   phone: string;
   role: UserRole;
   subscription?: SubscriptionType;
-  planId?: string; // Relation to Plan table
+  planId?: string;
   trialEndsAt?: string;
   active: boolean;
   modules: ModuleType[];
   since: string;
-  dependents: Dependent[];
   aiUsageTokenCount?: number;
   avatarUrl?: string;
+  paymentHistory?: PaymentHistory[];
 }
 
 export interface Notification {
@@ -113,6 +112,21 @@ export interface Notification {
   type: 'FINANCE' | 'TASK' | 'SYSTEM';
   read: boolean;
   date: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  imageUrl?: string;
+  date: string;
+}
+
+export interface Tutorial {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string; // YouTube/Vimeo embed link
 }
 
 export type DateRangeOption = '7D' | '15D' | '30D' | '60D' | 'CUSTOM';
@@ -133,9 +147,7 @@ export interface SystemConfig {
     openai?: string;
     anthropic?: string;
   };
-  
-  // Automation & Messaging
-  webhookUrl: string; // N8N, Backend Custom
+  webhookUrl: string;
   evolutionApi: {
     enabled: boolean;
     baseUrl: string;
@@ -143,9 +155,19 @@ export interface SystemConfig {
     instanceName: string;
     instanceToken?: string;
   };
-
-  paymentGateway: 'ASAAS' | 'STRIPE' | 'MERCADOPAGO';
-  paymentApiKey: string;
+  // PagSeguro Specifics
+  paymentGateway: {
+    provider: 'PAGSEGURO';
+    email: string;
+    token: string;
+    sandbox: boolean;
+    rates: {
+      creditCard: number; // %
+      creditCardInstallment: number; // % per month
+      pix: number; // %
+      boleto: number; // Fixed fee
+    }
+  };
   branding: {
     logoUrl?: string;
     chatAvatarUrl?: string;

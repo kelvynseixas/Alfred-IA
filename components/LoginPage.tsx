@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { SubscriptionType } from '../types';
+import { SubscriptionType, Plan } from '../types';
 import { Mail, Lock, User, Phone, ArrowRight, Bot, ShieldCheck } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, pass: string) => void;
   onRegister: (name: string, email: string, phone: string, sub: SubscriptionType) => void;
+  plans: Plan[];
   isDarkMode: boolean;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, isDarkMode }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +20,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, isDar
   const cardBg = isDarkMode ? 'bg-slate-900/80' : 'bg-white';
   const textPrimary = isDarkMode ? 'text-white' : 'text-slate-900';
   const inputBg = isDarkMode ? 'bg-slate-800' : 'bg-slate-50';
+
+  const activePlans = plans.filter(p => p.active);
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-6 transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
@@ -49,18 +52,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, isDar
               <div>
                   <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Selecione o Plano</label>
                   <div className="grid grid-cols-1 gap-2">
-                      <button type="button" onClick={() => setSubType(SubscriptionType.MONTHLY)} className={`p-3 rounded-lg border text-left flex justify-between items-center ${subType === SubscriptionType.MONTHLY ? 'border-gold-500 bg-gold-500/10' : 'border-slate-700'}`}>
-                          <span className={textPrimary}>Mensal</span>
-                          <span className="text-gold-500 font-bold">R$ 39,90</span>
-                      </button>
-                      <button type="button" onClick={() => setSubType(SubscriptionType.SEMIANNUAL)} className={`p-3 rounded-lg border text-left flex justify-between items-center ${subType === SubscriptionType.SEMIANNUAL ? 'border-gold-500 bg-gold-500/10' : 'border-slate-700'}`}>
-                          <span className={textPrimary}>Semestral</span>
-                          <span className="text-gold-500 font-bold">R$ 199,50</span>
-                      </button>
-                      <button type="button" onClick={() => setSubType(SubscriptionType.ANNUAL)} className={`p-3 rounded-lg border text-left flex justify-between items-center ${subType === SubscriptionType.ANNUAL ? 'border-gold-500 bg-gold-500/10' : 'border-slate-700'}`}>
-                          <span className={textPrimary}>Anual</span>
-                          <span className="text-gold-500 font-bold">R$ 399,00</span>
-                      </button>
+                      {activePlans.map(plan => (
+                          <button key={plan.id} type="button" onClick={() => setSubType(plan.type)} className={`p-3 rounded-lg border text-left flex justify-between items-center ${subType === plan.type ? 'border-gold-500 bg-gold-500/10' : 'border-slate-700'}`}>
+                            <span className={textPrimary}>{plan.name}</span>
+                            <span className="text-gold-500 font-bold">R$ {plan.price.toFixed(2)}</span>
+                          </button>
+                      ))}
                   </div>
               </div>
             </>

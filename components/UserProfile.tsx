@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { User, UserRole, SubscriptionType } from '../types';
-import { User as UserIcon, Mail, Shield, Key, CreditCard, Phone, Users, Plus, Trash2, Smartphone, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, UserRole } from '../types';
+import { User as UserIcon, Mail, Lock, Eye, EyeOff, Camera, Phone, FileText } from 'lucide-react';
 
 interface UserProfileProps {
   user: User;
@@ -9,30 +9,8 @@ interface UserProfileProps {
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUpdateUser }) => {
-  const [newDependent, setNewDependent] = useState({ name: '', relation: '', email: '', phone: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   
-  // Dependent restriction
-  const isDependent = user.role === UserRole.DEPENDENT;
-
-  const handleAddDependent = () => {
-      if(isDependent) return;
-      if(!newDependent.name || !newDependent.email) return;
-      const updatedUser = {
-          ...user,
-          dependents: [...(user.dependents || []), { 
-              id: Date.now().toString(), 
-              name: newDependent.name, 
-              relation: newDependent.relation,
-              email: newDependent.email,
-              phone: newDependent.phone,
-              accessLevel: 'VIEW' as any 
-          }]
-      };
-      onUpdateUser(updatedUser);
-      setNewDependent({ name: '', relation: '', email: '', phone: '', password: '' });
-  };
-
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
         const url = URL.createObjectURL(e.target.files[0]);
@@ -48,7 +26,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
     <div className="space-y-8 animate-fade-in max-w-4xl mx-auto">
       <header className={`mb-8 border-b pb-6 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
         <h2 className={`text-3xl font-serif ${textPrimary}`}>Meu Perfil</h2>
-        <p className="text-slate-400">Gerencie seus dados e acesso</p>
+        <p className="text-slate-400">Gerencie seus dados e assinatura</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -73,8 +51,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                 )}
             </div>
 
-            {!isDependent && (
-               <div className={`rounded-xl border p-6 ${cardClass}`}>
+            <div className={`rounded-xl border p-6 ${cardClass}`}>
                 <h4 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Assinatura</h4>
                 <div className="space-y-3">
                     <div className="flex justify-between text-sm">
@@ -89,7 +66,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                     </div>
                 </div>
             </div>
-            )}
         </div>
 
         <div className="md:col-span-2 space-y-6">
@@ -100,29 +76,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                 <div className="grid grid-cols-1 gap-6">
                     <div>
                         <label className="block text-xs text-slate-400 mb-1">Nome Completo</label>
-                        <input disabled={isDependent} type="text" defaultValue={user.name} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                        <input type="text" defaultValue={user.name} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Email</label>
-                            <input disabled={isDependent} type="email" defaultValue={user.email} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                            <input type="email" defaultValue={user.email} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
                         </div>
                         <div>
                             <label className="block text-xs text-slate-400 mb-1">Telefone</label>
-                            <input disabled={isDependent} type="tel" defaultValue={user.phone} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
+                            <input type="tel" defaultValue={user.phone} className={`w-full border rounded p-2.5 focus:border-gold-500 focus:outline-none ${inputClass}`} />
                         </div>
                     </div>
                 </div>
-                {!isDependent && (
-                  <div className="mt-6 flex justify-end">
-                      <button className="bg-gold-600 hover:bg-gold-500 text-slate-900 px-6 py-2 rounded font-bold transition-colors">Salvar Alterações</button>
-                  </div>
-                )}
+                <div className="mt-6 flex justify-end">
+                    <button className="bg-gold-600 hover:bg-gold-500 text-slate-900 px-6 py-2 rounded font-bold transition-colors">Salvar Alterações</button>
+                </div>
             </div>
 
-            {/* Password Change - Accessible only for User/Admin */}
-            {!isDependent && (
-              <div className={`rounded-xl border p-8 ${cardClass}`}>
+            <div className={`rounded-xl border p-8 ${cardClass}`}>
                   <h3 className={`text-lg font-medium mb-6 flex items-center gap-2 ${textPrimary}`}>
                       <Lock className="w-5 h-5 text-gold-500" /> Alterar Senha
                   </h3>
@@ -136,45 +108,38 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, isDarkMode, onUp
                       </div>
                       <button className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded font-medium transition-colors">Atualizar Senha</button>
                   </div>
-              </div>
-            )}
-
-            {/* Dependents - Restricted to USER/ADMIN */}
-            {!isDependent && (
-              <div className={`rounded-xl border p-8 ${cardClass}`}>
-                  <h3 className={`text-lg font-medium mb-6 flex items-center gap-2 ${textPrimary}`}>
-                      <Users className="w-5 h-5 text-gold-500" /> Controle Familiar
-                  </h3>
-                  
-                  <div className="space-y-4 mb-6">
-                      {user.dependents && user.dependents.length > 0 ? (
-                          user.dependents.map(dep => (
-                              <div key={dep.id} className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 rounded border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                                  <div>
-                                      <p className={`font-medium ${textPrimary}`}>{dep.name} <span className="text-xs text-slate-500">({dep.relation})</span></p>
-                                      <p className="text-xs text-slate-500">{dep.email} • {dep.phone}</p>
-                                  </div>
-                                  <button className="text-slate-500 hover:text-red-400 mt-2 md:mt-0"><Trash2 size={16} /></button>
-                              </div>
-                          ))
-                      ) : <p className="text-sm text-slate-500 italic">Nenhum dependente cadastrado.</p>}
-                  </div>
-
-                  <div className={`p-4 rounded border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
-                      <p className="text-xs font-bold text-slate-400 mb-4 uppercase">Adicionar Dependente</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                          <input placeholder="Nome" className={`border rounded p-2 text-sm ${inputClass}`} value={newDependent.name} onChange={(e) => setNewDependent({...newDependent, name: e.target.value})} />
-                          <input placeholder="Parentesco" className={`border rounded p-2 text-sm ${inputClass}`} value={newDependent.relation} onChange={(e) => setNewDependent({...newDependent, relation: e.target.value})} />
-                          <input placeholder="Email" className={`border rounded p-2 text-sm ${inputClass}`} value={newDependent.email} onChange={(e) => setNewDependent({...newDependent, email: e.target.value})} />
-                          <input placeholder="WhatsApp" className={`border rounded p-2 text-sm ${inputClass}`} value={newDependent.phone} onChange={(e) => setNewDependent({...newDependent, phone: e.target.value})} />
-                          <input type="password" placeholder="Senha Provisória" className={`border rounded p-2 text-sm ${inputClass}`} value={newDependent.password} onChange={(e) => setNewDependent({...newDependent, password: e.target.value})} />
-                      </div>
-                      <div className="flex justify-end">
-                          <button onClick={handleAddDependent} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm flex items-center gap-2"><Plus size={14} /> Adicionar</button>
-                      </div>
-                  </div>
-              </div>
-            )}
+            </div>
+            
+            {/* Payment History */}
+            <div className={`rounded-xl border p-8 ${cardClass}`}>
+                <h3 className={`text-lg font-medium mb-6 flex items-center gap-2 ${textPrimary}`}>
+                    <FileText className="w-5 h-5 text-gold-500" /> Histórico de Pagamentos (PagSeguro)
+                </h3>
+                {user.paymentHistory && user.paymentHistory.length > 0 ? (
+                    <table className="w-full text-left text-sm text-slate-400">
+                        <thead className={`text-xs uppercase ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-100'}`}>
+                            <tr>
+                                <th className="p-3">Data</th>
+                                <th className="p-3">Valor</th>
+                                <th className="p-3">Método</th>
+                                <th className="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {user.paymentHistory.map(pay => (
+                                <tr key={pay.id} className="border-b border-slate-700">
+                                    <td className="p-3">{new Date(pay.date).toLocaleDateString()}</td>
+                                    <td className="p-3 text-gold-500">R$ {pay.amount.toFixed(2)}</td>
+                                    <td className="p-3">{pay.method}</td>
+                                    <td className="p-3"><span className="text-emerald-500 text-xs font-bold">{pay.status}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p className="text-sm text-slate-500 italic">Nenhum pagamento registrado.</p>
+                )}
+            </div>
         </div>
       </div>
     </div>
