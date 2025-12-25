@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Transaction, TransactionType, DateRangeOption, RecurrencePeriod } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, Plus, X, List, Trash2, Edit2, Tag, CalendarRange, Download, FileSpreadsheet, FileText, Repeat } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, X, List, Trash2, Edit2, Tag, CalendarRange, Download, FileSpreadsheet, FileText, Repeat, ArrowUpCircle, ArrowDownCircle, Target } from 'lucide-react';
 
 interface FinancialModuleProps {
   transactions: Transaction[];
@@ -62,6 +62,11 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   const expenseChartData = getCategoryData(TransactionType.EXPENSE);
   const investChartData = getCategoryData(TransactionType.INVESTMENT);
 
+  const openModal = (type: TransactionType) => {
+      setNewTrans(prev => ({ ...prev, type }));
+      setIsModalOpen(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTrans.description || !newTrans.amount) return;
@@ -108,12 +113,31 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                     <option value="CUSTOM">Todo Período</option>
                 </select>
              </div>
-            <button onClick={() => setIsModalOpen(true)} className="bg-gold-600 hover:bg-gold-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium shadow-lg shadow-gold-900/20">
-                <Plus size={18} /> <span className="hidden md:inline">Nova Transação</span>
-            </button>
         </div>
       </header>
       
+      {/* ACTION BUTTONS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <button 
+            onClick={() => openModal(TransactionType.INCOME)}
+            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
+          >
+              <ArrowUpCircle size={24} /> Nova Entrada
+          </button>
+          <button 
+            onClick={() => openModal(TransactionType.EXPENSE)}
+            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
+          >
+              <ArrowDownCircle size={24} /> Nova Saída
+          </button>
+          <button 
+            onClick={() => openModal(TransactionType.INVESTMENT)}
+            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-gold-600 hover:bg-gold-500 text-white font-bold transition-all shadow-lg hover:scale-[1.02]"
+          >
+              <Target size={24} /> Novo Investimento
+          </button>
+      </div>
+
       {/* 4 CHARTS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Chart 1: Overview */}
@@ -134,7 +158,10 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
           
           {/* Chart 2: Income */}
           <div className={`p-4 rounded-xl border ${cardBg}`}>
-              <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Entradas por Categoria</h3>
+              <div className="flex justify-between items-center mb-4">
+                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Entradas</h3>
+                  <button onClick={() => setDetailsView(TransactionType.INCOME)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+              </div>
               <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -150,7 +177,10 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
           {/* Chart 3: Expense */}
           <div className={`p-4 rounded-xl border ${cardBg}`}>
-              <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Saídas por Categoria</h3>
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Saídas</h3>
+                  <button onClick={() => setDetailsView(TransactionType.EXPENSE)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+              </div>
               <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -166,7 +196,10 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
            {/* Chart 4: Investment */}
            <div className={`p-4 rounded-xl border ${cardBg}`}>
-              <h3 className={`text-sm font-bold uppercase mb-4 ${textSecondary}`}>Investimentos</h3>
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className={`text-sm font-bold uppercase ${textSecondary}`}>Investimentos</h3>
+                  <button onClick={() => setDetailsView(TransactionType.INVESTMENT)} className="text-xs text-blue-400 hover:text-white">Ver Lista</button>
+              </div>
               <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -186,23 +219,28 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl w-full max-w-md p-6 shadow-2xl overflow-y-auto max-h-[90vh]`}>
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className={`text-xl font-serif ${textPrimary}`}>Nova Transação</h3>
+                    <h3 className={`text-xl font-serif ${textPrimary}`}>
+                        {newTrans.type === 'INCOME' ? 'Nova Entrada' : newTrans.type === 'EXPENSE' ? 'Nova Saída' : 'Novo Investimento'}
+                    </h3>
                     <button onClick={() => setIsModalOpen(false)}><X className="text-slate-400 hover:text-red-500" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-xs text-slate-400 mb-1">Tipo</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {[TransactionType.INCOME, TransactionType.EXPENSE, TransactionType.INVESTMENT].map(t => (
-                                <button type="button" key={t} onClick={() => setNewTrans({...newTrans, type: t})} className={`py-2 text-xs font-bold rounded border ${newTrans.type === t ? 'bg-slate-700 text-white border-gold-500' : (isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600')}`}>
-                                    {t === 'INCOME' ? 'ENTRADA' : t === 'EXPENSE' ? 'SAÍDA' : 'INVEST.'}
-                                </button>
-                            ))}
+                    {/* Visual Type Indicator */}
+                    <div className="flex justify-center mb-4">
+                        <div className={`p-3 rounded-full ${
+                            newTrans.type === 'INCOME' ? 'bg-emerald-500/20 text-emerald-500' :
+                            newTrans.type === 'EXPENSE' ? 'bg-red-500/20 text-red-500' :
+                            'bg-gold-500/20 text-gold-500'
+                        }`}>
+                            {newTrans.type === 'INCOME' ? <ArrowUpCircle size={32} /> :
+                             newTrans.type === 'EXPENSE' ? <ArrowDownCircle size={32} /> :
+                             <Target size={32} />}
                         </div>
                     </div>
+
                     <div>
                         <label className="block text-xs text-slate-400 mb-1">Descrição</label>
-                        <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} required />
+                        <input className="w-full border rounded p-2 bg-transparent focus:border-gold-500 focus:outline-none" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} required autoFocus />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -242,10 +280,64 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                         )}
                     </div>
 
-                    <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-3 rounded mt-4">Confirmar</button>
+                    <button type="submit" className={`w-full font-bold py-3 rounded mt-4 text-white ${
+                         newTrans.type === 'INCOME' ? 'bg-emerald-600 hover:bg-emerald-500' :
+                         newTrans.type === 'EXPENSE' ? 'bg-red-600 hover:bg-red-500' :
+                         'bg-gold-600 hover:bg-gold-500'
+                    }`}>
+                        Confirmar Lançamento
+                    </button>
                 </form>
             </div>
         </div>
+      )}
+
+       {/* Details Modal */}
+       {detailsView && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl`}>
+                  <div className={`p-6 border-b flex justify-between items-center rounded-t-xl ${isDarkMode ? 'bg-slate-850 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div>
+                          <h3 className={`text-2xl font-serif ${textPrimary}`}>{getDetailsTitle(detailsView)}</h3>
+                      </div>
+                      <button onClick={() => setDetailsView(null)}><X className="text-slate-400 hover:text-red-500" /></button>
+                  </div>
+                  <div className={`flex-1 overflow-y-auto p-6 custom-scrollbar ${isDarkMode ? 'bg-slate-900' : 'bg-white'}`}>
+                        <table className="w-full text-left text-sm text-slate-400">
+                            <thead className={`text-xs uppercase sticky top-0 ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                                <tr>
+                                    <th className="px-4 py-3 rounded-l-lg">Data</th>
+                                    <th className="px-4 py-3">Descrição</th>
+                                    <th className="px-4 py-3">Categoria</th>
+                                    <th className="px-4 py-3">Recorrência</th>
+                                    <th className="px-4 py-3 text-right">Valor</th>
+                                    <th className="px-4 py-3 text-center rounded-r-lg">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredTransactionsForDetails.slice().reverse().map(t => (
+                                    <tr key={t.id} className={`border-b transition-colors ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/30' : 'border-slate-100 hover:bg-slate-50'}`}>
+                                        <td className="px-4 py-3">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                                        <td className={`px-4 py-3 font-medium ${textPrimary}`}>{t.description}</td>
+                                        <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>{t.category}</span></td>
+                                        <td className="px-4 py-3">
+                                            {t.recurrencePeriod === 'MONTHLY' && <span className="flex items-center gap-1 text-blue-400"><Repeat size={12} /> Mensal</span>}
+                                            {t.recurrencePeriod === 'WEEKLY' && <span className="flex items-center gap-1 text-purple-400"><Repeat size={12} /> Semanal</span>}
+                                            {(!t.recurrencePeriod || t.recurrencePeriod === 'NONE') && '-'}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-bold ${detailsView === TransactionType.INCOME ? 'text-emerald-400' : detailsView === TransactionType.EXPENSE ? 'text-red-400' : 'text-gold-400'}`}>
+                                            R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <button onClick={() => onDeleteTransaction(t.id)} className="p-1 hover:bg-red-500/10 rounded text-slate-500 hover:text-red-400 transition-colors" title="Excluir"><Trash2 size={16} /></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );
