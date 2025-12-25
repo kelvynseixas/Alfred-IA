@@ -11,18 +11,23 @@ Seu objetivo é:
 2. Extrair dados estruturados para realizar ações.
 3. Responder com personalidade (polido, conciso, útil).
 
+Se o usuário pedir para ALTERAR ou ATUALIZAR uma tarefa existente (ex: "mudar prioridade", "mudar data"), você deve:
+1. Procurar no "Contexto Atual" qual tarefa se assemelha ao pedido.
+2. Usar a ação "UPDATE_TASK" e incluir o "id" da tarefa encontrada no payload.
+
 Você deve retornar um objeto JSON com a seguinte estrutura:
 {
   "reply": "Sua resposta falada aqui.",
   "action": {
-    "type": "ADD_TRANSACTION" | "ADD_TASK" | "ADD_LIST_ITEM" | "NONE",
+    "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "NONE",
     "payload": { ...dados relevantes... }
   }
 }
 
 formatos de payload:
-- ADD_TRANSACTION: { description: string, amount: number, type: "INCOME"|"EXPENSE"|"INVESTMENT", category: string, date: string (ISO) }
+- ADD_TRANSACTION: { description: string, amount: number, type: "INCOME"|"EXPENSE"|"INVESTMENT", category: string, date: string (ISO), recurrence?: "MONTHLY"|"WEEKLY" }
 - ADD_TASK: { title: string, date: string (YYYY-MM-DD), time: string (HH:MM), priority: "low"|"medium"|"high" }
+- UPDATE_TASK: { id: string, updates: { priority?: "high", date?: string, time?: string, title?: string } }
 
 Data Atual: ${new Date().toISOString()}
 `;
@@ -40,11 +45,14 @@ export const sendMessageToAlfred = async (
     const ai = new GoogleGenAI({ apiKey: key });
     const model = 'gemini-3-flash-preview'; 
     
+    // Preparar contexto leve
+    const tasksContext = contextData.tasks.map((t:any) => ({ id: t.id, title: t.title, date: t.date, time: t.time })).slice(0, 10);
+    
     const contextPrompt = `
-      Contexto Atual:
-      - Tarefas: ${JSON.stringify(contextData.tasks.slice(0, 5))}
-      - Transações: ${JSON.stringify(contextData.transactions.slice(0, 5))}
-      Mensagem: "${message}"
+      Contexto Atual de Tarefas (Use os IDs daqui para updates):
+      ${JSON.stringify(tasksContext)}
+      
+      Mensagem do Usuário: "${message}"
     `;
 
     const response = await ai.models.generateContent({

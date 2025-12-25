@@ -8,9 +8,6 @@ import {
   ListGroup, 
   ItemStatus,
   User,
-  UserRole,
-  SubscriptionType,
-  Notification,
   AIActionType
 } from './types';
 import { FinancialModule } from './components/FinancialModule';
@@ -21,7 +18,7 @@ import { AlfredChat } from './components/AlfredChat';
 import { UserProfile } from './components/UserProfile';
 import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
-import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock } from 'lucide-react';
 
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%230f172a' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M50 25C40 25 32 33 32 43C32 55 42 60 50 60C58 60 68 55 68 43C68 33 60 25 50 25Z' fill='%23f1f5f9'/%3E%3Cpath d='M35 40C35 40 38 42 42 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M65 40C65 40 62 42 58 42' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M50 70L30 90H70L50 70Z' fill='%23d97706'/%3E%3Cpath d='M50 60V70' stroke='%23d97706' stroke-width='2'/%3E%3Cpath d='M42 50C45 52 55 52 58 50' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
@@ -36,6 +33,18 @@ const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [lists, setLists] = useState<ListGroup[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [tutorials, setTutorials] = useState<any[]>([]);
+
+  // Time & Notification State
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -54,8 +63,10 @@ const App = () => {
             setTasks(data.tasks || []);
             setLists(data.lists || []);
             if(data.users) setUsers(data.users);
+            if(data.plans) setPlans(data.plans);
+            if(data.coupons) setCoupons(data.coupons);
+            if(data.tutorials) setTutorials(data.tutorials);
             
-            // Se o usuário logado não estiver no state ainda (ex: refresh), tentar recuperar ou usar o retornado
             if (!currentUser && localStorage.getItem('alfred_user_data')) {
                  setCurrentUser(JSON.parse(localStorage.getItem('alfred_user_data')!));
             }
@@ -67,95 +78,15 @@ const App = () => {
             handleLogout();
         }
     } catch (e) { 
-        console.error("Erro ao carregar dados", e);
         handleLogout();
     }
   };
 
-  // --- Handlers Financeiro ---
-  const handleAddTransaction = async (t: Omit<Transaction, 'id'>) => {
-    try {
-        const res = await fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-            body: JSON.stringify(t)
-        });
-        if (res.ok) {
-            await fetchDashboardData();
-            return true;
-        }
-    } catch (e) { console.error(e); }
-    return false;
-  };
-
-  const handleDeleteTransaction = async (id: string) => {
-    await fetch(`/api/transactions/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }
-    });
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  };
-
-  // --- Handlers Tarefas ---
-  const handleAddTask = async (t: Omit<Task, 'id'>) => {
-    try {
-        const res = await fetch('/api/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-            body: JSON.stringify(t)
-        });
-        if (res.ok) {
-            await fetchDashboardData();
-            return true;
-        }
-    } catch (e) { console.error(e); }
-    return false;
-  };
-
-  const handleToggleTask = async (id: string) => {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-    const newStatus = task.status === TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE;
-    await fetch(`/api/tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-        body: JSON.stringify({ status: newStatus })
-    });
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-  };
-
-  // --- Handlers Listas ---
-  const handleAddList = async (name: string) => {
-    const res = await fetch('/api/lists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-        body: JSON.stringify({ name })
-    });
-    if (res.ok) fetchDashboardData();
-  };
-
-  const handleAddItem = async (listId: string, name: string) => {
-      fetchDashboardData();
-  };
-
-  const handleToggleItem = async (listId: string, itemId: string) => {
-      const list = lists.find(l => l.id === listId);
-      const item = list?.items.find(i => i.id === itemId);
-      if(!item) return;
-      const newStatus = item.status === ItemStatus.DONE ? ItemStatus.PENDING : ItemStatus.DONE;
-      
-      await fetch(`/api/lists/items/${itemId}`, {
+  const handleEditTask = async (id: string, updates: Partial<Task>) => {
+      await fetch(`/api/tasks/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
-          body: JSON.stringify({ status: newStatus })
-      });
-      fetchDashboardData();
-  };
-
-  const handleDeleteItem = async (listId: string, itemId: string) => {
-      await fetch(`/api/lists/items/${itemId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }
+          body: JSON.stringify(updates)
       });
       fetchDashboardData();
   };
@@ -165,26 +96,27 @@ const App = () => {
       console.log("Executando ação da IA:", action);
       
       if (action.type === 'ADD_TRANSACTION') {
-          // Payload esperado: { description, amount, type, category, date? }
-          await handleAddTransaction({
-              description: action.payload.description || 'Transação via Alfred',
-              amount: Number(action.payload.amount),
-              type: action.payload.type || TransactionType.EXPENSE,
-              category: action.payload.category || 'Geral',
-              date: action.payload.date || new Date().toISOString()
+          await fetch('/api/transactions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
+            body: JSON.stringify(action.payload)
           });
+          fetchDashboardData();
       } 
       else if (action.type === 'ADD_TASK') {
-          // Payload esperado: { title, date, time?, priority? }
-          await handleAddTask({
-              title: action.payload.title,
-              date: action.payload.date, // Formato YYYY-MM-DD
-              time: action.payload.time || '',
-              priority: action.payload.priority || 'medium',
-              status: TaskStatus.PENDING
+          await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` },
+            body: JSON.stringify({...action.payload, status: TaskStatus.PENDING})
           });
+          fetchDashboardData();
       }
-      // Expandir para listas se necessário
+      else if (action.type === 'UPDATE_TASK') {
+          // Payload: { id: string, updates: {} }
+          if (action.payload.id && action.payload.updates) {
+              await handleEditTask(action.payload.id, action.payload.updates);
+          }
+      }
   };
 
   // --- Handlers User ---
@@ -228,10 +160,20 @@ const App = () => {
     setCurrentUser(null);
   };
 
-  // Se não estiver autenticado, mostrar Login
-  if (!isAuthenticated) {
-      return <LoginPage onLogin={handleLogin} onRegister={() => {}} plans={[]} isDarkMode={isDarkMode} />;
-  }
+  // Helper for Notifications
+  const getDueItems = () => {
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrow = tomorrowDate.toISOString().split('T')[0];
+
+      const dueTasks = tasks.filter(t => t.status !== TaskStatus.DONE && (t.date === today || t.date === tomorrow));
+      // Assume bills might be transactions in future? For now just tasks
+      return dueTasks;
+  };
+  const dueItems = getDueItems();
+
+  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} onRegister={() => {}} plans={[]} isDarkMode={isDarkMode} />;
 
   const btnClass = (mod: ModuleType) => `w-full text-left p-3 rounded-lg flex gap-3 transition-colors ${activeModule === mod ? 'bg-slate-800 text-gold-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`;
 
@@ -243,6 +185,13 @@ const App = () => {
             <Bot className="text-gold-500 w-8 h-8" />
             <h1 className="text-2xl font-serif font-bold tracking-tight text-white">Alfred IA</h1>
           </div>
+          
+          {/* Clock Display */}
+          <div className="mb-6 px-3 py-2 bg-slate-800/50 rounded-lg flex items-center gap-2 text-slate-300 text-sm">
+             <Clock size={16} className="text-gold-500" />
+             <span>{currentTime.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+
           <nav className="space-y-1">
             <button onClick={() => setActiveModule(ModuleType.FINANCE)} className={btnClass(ModuleType.FINANCE)}><LayoutDashboard size={20}/> Financeiro</button>
             <button onClick={() => setActiveModule(ModuleType.TASKS)} className={btnClass(ModuleType.TASKS)}><CheckSquare size={20}/> Tarefas</button>
@@ -273,18 +222,51 @@ const App = () => {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
-        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={handleAddTransaction} onDeleteTransaction={handleDeleteTransaction} isDarkMode={isDarkMode} />}
-        {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={handleToggleTask} onAddTask={handleAddTask} onDeleteTask={() => {}} onEditTask={() => {}} />}
-        {activeModule === ModuleType.LISTS && <ListModule lists={lists} onAddList={handleAddList} onToggleItem={handleToggleItem} onDeleteItem={handleDeleteItem} onAddItem={handleAddItem} />}
-        {activeModule === ModuleType.TUTORIALS && <TutorialModule tutorials={[]} isDarkMode={isDarkMode} />}
-        {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
-        {activeModule === ModuleType.ADMIN && currentUser?.role === 'ADMIN' && <AdminPanel users={users} plans={[]} tutorials={[]} isDarkMode={isDarkMode} onUpdateUser={() => {}} onAddUser={() => {}} onManagePlan={() => {}} onManageTutorial={() => {}} onAddAnnouncement={() => {}} />}
+        {/* Header with Notification */}
+        <div className="absolute top-8 right-8 z-40">
+            <div className="relative">
+                <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 rounded-full bg-slate-800 text-slate-300 hover:text-white relative">
+                    <Bell size={24} />
+                    {dueItems.length > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>}
+                </button>
+                
+                {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+                        <div className="p-3 border-b border-slate-700 font-bold text-white text-sm">Notificações</div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {dueItems.length === 0 ? (
+                                <p className="p-4 text-xs text-slate-500 text-center">Nenhuma pendência urgente.</p>
+                            ) : (
+                                dueItems.map(t => (
+                                    <div key={t.id} className="p-3 hover:bg-slate-800 border-b border-slate-800/50">
+                                        <p className="text-sm text-slate-200">{t.title}</p>
+                                        <p className="text-xs text-gold-500">Vence: {t.date.split('T')[0].split('-').reverse().join('/')}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} onAddTransaction={async (t) => { await fetch('/api/transactions', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTransaction={async (id) => { await fetch(`/api/transactions/${id}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); setTransactions(prev=>prev.filter(x=>x.id!==id)); }} isDarkMode={isDarkMode} />}
+        
+        {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={async (id) => { await handleEditTask(id, {status: tasks.find(t=>t.id===id)?.status===TaskStatus.DONE ? TaskStatus.PENDING : TaskStatus.DONE}); }} onAddTask={async (t) => { await fetch('/api/tasks', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify(t)}); fetchDashboardData(); }} onDeleteTask={() => {}} onEditTask={handleEditTask} />}
+        
+        {activeModule === ModuleType.LISTS && <ListModule lists={lists} onAddList={async (n) => { await fetch('/api/lists', {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify({name:n})}); fetchDashboardData(); }} onToggleItem={async (l, i) => { const list=lists.find(g=>g.id===l); const item=list?.items.find(x=>x.id===i); if(item) { await fetch(`/api/lists/items/${i}`, {method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('alfred_token')}`},body:JSON.stringify({status:item.status==='DONE'?'PENDING':'DONE'})}); fetchDashboardData(); }}} onDeleteItem={async (l,i) => { await fetch(`/api/lists/items/${i}`, {method:'DELETE',headers:{'Authorization':`Bearer ${localStorage.getItem('alfred_token')}`}}); fetchDashboardData(); }} onAddItem={() => fetchDashboardData()} />}
+        
+        {activeModule === ModuleType.TUTORIALS && <TutorialModule tutorials={tutorials} isDarkMode={isDarkMode} />}
+        
+        {activeModule === ModuleType.PROFILE && currentUser && <UserProfile user={currentUser} plans={plans} isDarkMode={isDarkMode} onUpdateUser={handleUpdateUser} />}
+        
+        {activeModule === ModuleType.ADMIN && currentUser?.role === 'ADMIN' && <AdminPanel users={users} plans={plans} coupons={coupons} tutorials={tutorials} isDarkMode={isDarkMode} onUpdateUser={() => fetchDashboardData()} onAddUser={() => fetchDashboardData()} onManagePlan={() => fetchDashboardData()} onManageTutorial={() => fetchDashboardData()} onAddAnnouncement={() => {}} />}
         
         <button onClick={() => setIsChatOpen(true)} className="fixed bottom-8 right-8 w-14 h-14 bg-gold-600 hover:bg-gold-500 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-transform z-50">
           <Bot className="text-slate-900 w-8 h-8" />
         </button>
         <AlfredChat 
-            appContext={{ transactions, tasks, lists }} 
+            appContext={{ tasks, transactions }} 
             isOpen={isChatOpen} 
             onClose={() => setIsChatOpen(false)} 
             onAIAction={handleAIAction} 

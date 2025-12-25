@@ -21,7 +21,7 @@ export enum SubscriptionType {
 }
 
 export interface Plan {
-  id: string;
+  id: string; // 'MONTHLY', 'SEMIANNUAL', 'ANNUAL'
   name: string;
   type: SubscriptionType;
   price: number;
@@ -42,6 +42,7 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   date: string;
+  recurrence?: 'NONE' | 'MONTHLY' | 'WEEKLY' | 'YEARLY';
 }
 
 export enum TaskStatus {
@@ -59,6 +60,7 @@ export interface Task {
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
   notified?: boolean;
+  recurrence?: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 }
 
 export enum ItemStatus {
@@ -99,13 +101,14 @@ export interface User {
   planId?: string;
   trialEndsAt?: string;
   active: boolean;
+  isTestUser?: boolean; // Novo campo
   modules: ModuleType[];
   since: string;
   aiUsageTokenCount?: number;
   avatarUrl?: string;
   paymentHistory?: PaymentHistory[];
-  readAnnouncements?: string[]; // IDs of read announcements
-  dismissedAnnouncements?: string[]; // IDs of hidden announcements
+  readAnnouncements?: string[]; 
+  dismissedAnnouncements?: string[]; 
 }
 
 export interface Notification {
@@ -131,7 +134,7 @@ export interface Tutorial {
   id: string;
   title: string;
   description: string;
-  videoUrl: string; // YouTube/Vimeo embed link
+  videoUrl: string; 
 }
 
 export type DateRangeOption = '7D' | '15D' | '30D' | '60D' | 'CUSTOM';
@@ -141,12 +144,12 @@ export interface Coupon {
   code: string;
   type: 'PERCENTAGE' | 'FIXED';
   value: number;
-  appliesTo: SubscriptionType[];
+  appliesTo: SubscriptionType[]; // Array de strings
   active: boolean;
 }
 
 export interface SystemConfig {
-  timezone: string; // e.g. 'America/Sao_Paulo'
+  timezone: string; 
   aiProvider: 'GEMINI' | 'OPENAI' | 'ANTHROPIC';
   aiKeys: {
     gemini?: string;
@@ -161,17 +164,16 @@ export interface SystemConfig {
     instanceName: string;
     instanceToken?: string;
   };
-  // PagSeguro Specifics
   paymentGateway: {
     provider: 'PAGSEGURO';
     email: string;
     token: string;
     sandbox: boolean;
     rates: {
-      creditCard: number; // %
-      creditCardInstallment: number; // % per month
-      pix: number; // %
-      boleto: number; // Fixed fee
+      creditCard: number; 
+      creditCardInstallment: number; 
+      pix: number; 
+      boleto: number; 
     }
   };
   branding: {
@@ -185,7 +187,7 @@ export interface SystemConfig {
 export type AIActionType = 
   | 'ADD_TRANSACTION' 
   | 'ADD_TASK' 
-  | 'UPDATE_TASK'
+  | 'UPDATE_TASK' // Novo
   | 'ADD_LIST_ITEM' 
   | 'COMPLETE_LIST_ITEM'
   | 'NONE';
