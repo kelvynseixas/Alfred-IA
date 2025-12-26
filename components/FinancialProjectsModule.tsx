@@ -10,17 +10,23 @@ interface ProjectsModuleProps {
   onDeleteProject: (id: string) => void;
 }
 
-export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ projects, isDarkMode, onAddProject, onUpdateProject, onDeleteProject }) => {
+export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ projects = [], isDarkMode, onAddProject, onUpdateProject, onDeleteProject }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProject, setNewProject] = useState({ title: '', description: '', targetAmount: '', deadline: '', category: 'GOAL' as any });
   const [amountInput, setAmountInput] = useState<{[key:string]: string}>({});
+
+  // Helper para evitar quebra com valores nulos/undefined
+  const safeNumber = (value: any) => {
+      const num = parseFloat(value);
+      return isNaN(num) ? 0 : num;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       onAddProject({
           title: newProject.title,
           description: newProject.description,
-          targetAmount: parseFloat(newProject.targetAmount),
+          targetAmount: safeNumber(newProject.targetAmount),
           deadline: newProject.deadline,
           category: newProject.category
       });
@@ -29,14 +35,20 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
   };
 
   const handleUpdateAmount = (id: string, current: number, add: boolean) => {
-      const val = parseFloat(amountInput[id] || '0');
+      const val = safeNumber(amountInput[id]);
       if (val <= 0) return;
-      const newAmount = add ? current + val : current - val;
+      const safeCurrent = safeNumber(current);
+      const newAmount = add ? safeCurrent + val : safeCurrent - val;
       onUpdateProject(id, { currentAmount: Math.max(0, newAmount) });
       setAmountInput({...amountInput, [id]: ''});
   };
 
-  const getProgress = (current: number, target: number) => Math.min(100, (current / target) * 100);
+  const getProgress = (current: any, target: any) => {
+      const c = safeNumber(current);
+      const t = safeNumber(target);
+      if (t === 0) return 0;
+      return Math.min(100, (c / t) * 100);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -51,7 +63,16 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map(proj => (
+            {(!projects || projects.length === 0) ? (
+                <div className="col-span-full text-center py-12 text-slate-500">
+                    Nenhum projeto encontrado. Crie um novo para começar.
+                </div>
+            ) : projects.map(proj => {
+                const current = safeNumber(proj.currentAmount);
+                const target = safeNumber(proj.targetAmount);
+                const progress = getProgress(current, target);
+                
+                return (
                 <div key={proj.id} className={`rounded-xl border p-6 flex flex-col ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
@@ -59,8 +80,10 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                                 {proj.category === 'RESERVE' ? <PiggyBank size={20}/> : proj.category === 'ASSET' ? <Briefcase size={20}/> : <Target size={20}/>}
                             </div>
                             <div>
-                                <h3 className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{proj.title}</h3>
-                                <p className="text-xs text-slate-500">{proj.deadline ? `Meta: ${new Date(proj.deadline).toLocaleDateString()}` : 'Sem prazo'}</p>
+                                <h3 className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{proj.title || 'Sem Título'}</h3>
+                                <p className="text-xs text-slate-500">
+                                    {proj.deadline ? `Meta: ${new Date(proj.deadline).toLocaleDateString()}` : 'Sem prazo'}
+                                </p>
                             </div>
                         </div>
                         <button onClick={() => onDeleteProject(proj.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={16}/></button>
@@ -69,14 +92,14 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                     <div className="mb-4">
                         <div className="flex justify-between text-sm mb-1">
                             <span className="text-slate-400">Progresso</span>
-                            <span className={`font-bold ${getProgress(proj.currentAmount, proj.targetAmount) >= 100 ? 'text-emerald-400' : 'text-white'}`}>
-                                {getProgress(proj.currentAmount, proj.targetAmount).toFixed(1)}%
+                            <span className={`font-bold ${progress >= 100 ? 'text-emerald-400' : 'text-white'}`}>
+                                {progress.toFixed(1)}%
                             </span>
                         </div>
                         <div className="w-full bg-slate-700 rounded-full h-2">
                             <div 
-                                className={`h-2 rounded-full transition-all duration-1000 ${getProgress(proj.currentAmount, proj.targetAmount) >= 100 ? 'bg-emerald-500' : 'bg-gold-500'}`} 
-                                style={{width: `${getProgress(proj.currentAmount, proj.targetAmount)}%`}}
+                                className={`h-2 rounded-full transition-all duration-1000 ${progress >= 100 ? 'bg-emerald-500' : 'bg-gold-500'}`} 
+                                style={{width: `${progress}%`}}
                             ></div>
                         </div>
                     </div>
@@ -84,11 +107,11 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                     <div className="flex justify-between items-end mb-6">
                         <div>
                             <p className="text-xs text-slate-400">Atual</p>
-                            <p className="text-xl font-bold text-white">R$ {proj.currentAmount.toLocaleString()}</p>
+                            <p className="text-xl font-bold text-white">R$ {current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-xs text-slate-400">Meta</p>
-                            <p className="text-sm font-medium text-slate-300">R$ {proj.targetAmount.toLocaleString()}</p>
+                            <p className="text-sm font-medium text-slate-300">R$ {target.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                     </div>
 
@@ -101,12 +124,12 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                                 onChange={e => setAmountInput({...amountInput, [proj.id]: e.target.value})}
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:border-gold-500 focus:outline-none"
                             />
-                            <button onClick={() => handleUpdateAmount(proj.id, Number(proj.currentAmount), true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 rounded font-bold text-lg">+</button>
-                            <button onClick={() => handleUpdateAmount(proj.id, Number(proj.currentAmount), false)} className="bg-red-600 hover:bg-red-500 text-white px-3 rounded font-bold text-lg">-</button>
+                            <button onClick={() => handleUpdateAmount(proj.id, current, true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 rounded font-bold text-lg">+</button>
+                            <button onClick={() => handleUpdateAmount(proj.id, current, false)} className="bg-red-600 hover:bg-red-500 text-white px-3 rounded font-bold text-lg">-</button>
                         </div>
                     </div>
                 </div>
-            ))}
+            )})}
         </div>
 
         {isModalOpen && (

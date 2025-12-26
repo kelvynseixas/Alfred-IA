@@ -16,6 +16,7 @@ interface AdminPanelProps {
 }
 
 const getPlanName = (id: string) => {
+    if (!id) return 'Desconhecido';
     switch (id) {
         case 'MONTHLY': return 'Mensal';
         case 'SEMIANNUAL': return 'Semestral';
@@ -24,7 +25,7 @@ const getPlanName = (id: string) => {
     }
 };
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ users = [], plans = [], coupons = [], tutorials = [], isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
   // Config State
@@ -166,10 +167,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
   const inputClass = `w-full border rounded p-2 text-sm ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'}`;
   const labelClass = "block text-xs text-slate-400 mb-2 uppercase font-bold";
 
-  // Dashboard calculations
-  const planStats = plans.map(plan => {
-     const count = users.filter(u => !u.isTestUser && (u.subscription === plan.id || u.planId === plan.id)).length;
-     const revenue = count * (plan.price || 0);
+  // Safe Stats Calculation
+  const planStats = (plans || []).map(plan => {
+     const safeUsers = users || [];
+     const count = safeUsers.filter(u => !u.isTestUser && (u.subscription === plan.id || u.planId === plan.id)).length;
+     const price = Number(plan.price) || 0;
+     const revenue = count * price;
      return { id: plan.id, name: plan.name || getPlanName(plan.id), count, revenue };
   });
 
@@ -205,7 +208,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
                       <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Total Clientes</h3>
-                      <p className="text-3xl text-white font-serif">{users.filter(u => !u.isTestUser).length}</p>
+                      <p className="text-3xl text-white font-serif">{(users || []).filter(u => !u.isTestUser).length}</p>
                   </div>
                   {planStats.map(stat => (
                       <div key={stat.id} className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
@@ -229,7 +232,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                         <input placeholder="Senha" type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className={inputClass} />
                         <select value={newUser.subscription} onChange={e => setNewUser({...newUser, subscription: e.target.value})} className={inputClass} required={!newUser.isTestUser}>
                             <option value="" disabled>Selecione um Plano</option>
-                            {plans.map(p => <option key={p.id} value={p.id}>{p.name} - R${p.price.toFixed(2)}</option>)}
+                            {(plans || []).map(p => <option key={p.id} value={p.id}>{p.name} - R${Number(p.price).toFixed(2)}</option>)}
                         </select>
                         <div className="flex items-center gap-2 h-10"><input type="checkbox" id="isTestUser" checked={newUser.isTestUser} onChange={e => setNewUser({...newUser, isTestUser: e.target.checked})} className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-gold-500 focus:ring-gold-500" /><label htmlFor="isTestUser" className="text-slate-300 text-sm">Cliente Teste</label></div>
                         <button onClick={handleCreateUser} disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded text-sm font-bold">{loading ? <Loader2 className="animate-spin mx-auto"/> : 'Criar Cliente'}</button>
@@ -240,7 +243,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                        <table className="w-full text-left text-sm text-slate-400">
                            <thead className="text-xs uppercase bg-slate-800 text-slate-300"><tr><th className="p-3">Cliente</th><th className="p-3">Plano</th><th className="p-3">Vencimento</th><th className="p-3">Status</th><th className="p-3 text-right">Ações</th></tr></thead>
                            <tbody>
-                               {users.map(u => (
+                               {(users || []).map(u => (
                                    <tr key={u.id} className="border-b border-slate-800 hover:bg-slate-800/30">
                                        <td className="p-3"><p className="text-white font-medium">{u.name} {u.isTestUser && <span className="text-xs bg-blue-600 px-1 rounded ml-2">TESTE</span>}</p><p className="text-xs">{u.email}</p></td>
                                        <td className="p-3">{u.isTestUser ? <span className="font-bold text-blue-400">TESTER</span> : u.subscription}</td>
@@ -263,7 +266,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                                <div>
                                   <label className="text-xs text-slate-400">Plano</label>
                                   <select value={userEditForm.subscription} onChange={e => setUserEditForm({...userEditForm, subscription: e.target.value})} className={inputClass} disabled={editingUser.isTestUser}>
-                                      {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                      {(plans || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                   </select>
                                </div>
                                <div><label className="text-xs text-slate-400">Alterar Senha</label><input type="text" placeholder="Nova senha..." value={userEditForm.password} onChange={e => setUserEditForm({...userEditForm, password: e.target.value})} className={inputClass} /></div>
@@ -300,14 +303,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
       {activeTab === 'PLANS' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {['MONTHLY', 'SEMIANNUAL', 'ANNUAL'].map(type => {
-                  const plan = plans.find(p => p.id === type) || { id: type, price: 0, trialDays: 0 };
+                  const plan = (plans || []).find(p => p.id === type) || { id: type, price: 0, trialDays: 0 };
                   const planName = getPlanName(type);
                   return (
                     <div key={type} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
                         <h3 className="text-lg font-medium text-white mb-4">{planName}</h3>
                         <div className="space-y-4">
-                            <div><label className="text-xs text-slate-400">Preço (R$)</label><input type="number" step="0.01" defaultValue={plan.price} onBlur={(e) => handleUpdatePlan(plan.id, planName, Number(e.target.value), plan.trialDays)} className={inputClass} /></div>
-                            <div><label className="text-xs text-slate-400">Dias Grátis</label><input type="number" defaultValue={plan.trialDays} onBlur={(e) => handleUpdatePlan(plan.id, planName, plan.price, Number(e.target.value))} className={inputClass} /></div>
+                            <div><label className="text-xs text-slate-400">Preço (R$)</label><input type="number" step="0.01" defaultValue={Number(plan.price || 0)} onBlur={(e) => handleUpdatePlan(plan.id, planName, Number(e.target.value), plan.trialDays)} className={inputClass} /></div>
+                            <div><label className="text-xs text-slate-400">Dias Grátis</label><input type="number" defaultValue={plan.trialDays} onBlur={(e) => handleUpdatePlan(plan.id, planName, Number(plan.price || 0), Number(e.target.value))} className={inputClass} /></div>
                         </div>
                     </div>
                   );
@@ -339,7 +342,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                    <button onClick={handleCreateCoupon} className="bg-gold-600 hover:bg-gold-500 text-white px-6 py-2 rounded text-sm font-bold">Criar Cupom</button>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                   {coupons?.map(c => (
+                   {(coupons || []).map(c => (
                        <div key={c.id} className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
                            <div className="flex justify-between items-center mb-2">
                                <div><p className="text-white font-bold">{c.code}</p><p className="text-xs text-slate-400">{c.type === 'PERCENTAGE' ? `${c.value}%` : `R$ ${c.value}`} OFF</p></div>
@@ -410,7 +413,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                    </div>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                   {tutorials?.map(t => (
+                   {(tutorials || []).map(t => (
                        <div key={t.id} className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
                            <div className="p-3"><p className="text-white font-medium truncate">{t.title}</p></div>
                        </div>
