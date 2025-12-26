@@ -209,6 +209,7 @@ export type AIActionType =
   | 'ADD_LIST_ITEM' 
   | 'COMPLETE_LIST_ITEM'
   | 'ADD_PROJECT'
+  | 'UPDATE_PROJECT'
   | 'NONE';
 
 export interface AIResponse {

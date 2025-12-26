@@ -229,6 +229,25 @@ const App = () => {
             fetchDashboardData();
         }
 
+        // --- ATUALIZAR PROJETO (IA) ---
+        else if (action.type === 'UPDATE_PROJECT') {
+             const { id, amountToAdd } = action.payload;
+             const project = projects.find(p => p.id === id);
+             if (project && amountToAdd) {
+                 const current = parseFloat(project.currentAmount.toString());
+                 const val = sanitizeNumber(amountToAdd);
+                 const newAmount = current + val;
+                 
+                 await fetch(`/api/projects/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ currentAmount: newAmount })
+                 });
+                 setActiveModule(ModuleType.PROJECTS);
+                 fetchDashboardData();
+             }
+        }
+
         // --- LISTAS ---
         else if (action.type === 'ADD_LIST_ITEM') {
             const raw = action.payload || {};
@@ -434,7 +453,7 @@ const App = () => {
              <img src={ALFRED_ICON_URL} className="w-full h-full object-cover" />
           </div>
         </button>
-        <AlfredChat appContext={{ tasks, transactions }} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onAIAction={handleAIAction} />
+        <AlfredChat appContext={{ tasks, transactions, lists, projects }} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onAIAction={handleAIAction} />
       </main>
     </div>
   );

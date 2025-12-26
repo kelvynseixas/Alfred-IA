@@ -23,7 +23,7 @@ OBJETIVO JSON DE RESPOSTA:
 {
   "reply": "Texto curto, elegante e confirmação da ação",
   "action": {
-    "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "ADD_PROJECT" | "NONE",
+    "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "ADD_PROJECT" | "UPDATE_PROJECT" | "NONE",
     "payload": { ... }
   }
 }
@@ -31,6 +31,7 @@ OBJETIVO JSON DE RESPOSTA:
 FORMATOS DE PAYLOAD:
 - ADD_TRANSACTION: { "description": string, "amount": number, "type": "INCOME" | "EXPENSE" | "INVESTMENT", "category": string, "date": string, "recurrencePeriod": "MONTHLY" | "NONE", "recurrenceLimit": number }
 - ADD_PROJECT: { "title": string, "targetAmount": number, "category": "GOAL" | "RESERVE", "deadline": string }
+- UPDATE_PROJECT: { "id": string, "amountToAdd": number } (Use quando o usuário quiser adicionar saldo a um projeto existente)
 - ADD_TASK: { "title": string, "date": string, "time": string, "priority": "low" | "medium" | "high" }
 - ADD_LIST_ITEM: { "listId": string (OBRIGATÓRIO - use o ID da lista do contexto), "name": string }
 
@@ -38,8 +39,11 @@ CASOS DE USO:
 Usuário: "Gastei 50 no ifood"
 JSON: { "reply": "Registrado.", "action": { "type": "ADD_TRANSACTION", "payload": { "description": "iFood", "amount": 50, "type": "EXPENSE", "category": "Alimentação", "date": "${new Date().toISOString()}", "recurrencePeriod": "NONE" } } }
 
-Usuário: "Quero juntar 20 mil para um carro"
+Usuário: "Quero juntar 20 mil para um carro" (Se NÃO existir projeto Carro)
 JSON: { "reply": "Criei o projeto Carro.", "action": { "type": "ADD_PROJECT", "payload": { "title": "Carro", "targetAmount": 20000, "category": "GOAL" } } }
+
+Usuário: "Guardei 500 reais pro carro" (Se JÁ existir projeto Carro com ID "123")
+JSON: { "reply": "Atualizei o saldo do projeto Carro.", "action": { "type": "UPDATE_PROJECT", "payload": { "id": "123", "amountToAdd": 500 } } }
 
 Usuário: "adicione leite na lista de compras"
 (Contexto: [{ "id": "1", "name": "Compras" }])
@@ -63,9 +67,11 @@ export const sendMessageToAlfred = async (
     // Contexto simplificado
     const tasksSimple = contextData.tasks.map((t:any) => ({ id: t.id, title: t.title, date: t.date })).slice(0, 5);
     const listsSimple = contextData.lists ? contextData.lists.map((l:any) => ({ id: l.id, name: l.name })) : [];
+    const projectsSimple = contextData.projects ? contextData.projects.map((p:any) => ({ id: p.id, title: p.title, currentAmount: p.currentAmount })) : [];
     
     const contextPrompt = `
       CONTEXTO DO USUÁRIO:
+      - Projetos/Metas Atuais: ${JSON.stringify(projectsSimple)}
       - Tarefas Recentes: ${JSON.stringify(tasksSimple)}
       - Listas Disponíveis: ${JSON.stringify(listsSimple)}
       

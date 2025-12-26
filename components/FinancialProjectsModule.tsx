@@ -21,6 +21,10 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
       return isNaN(num) ? 0 : num;
   };
 
+  const formatCurrency = (val: number) => {
+      return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       onAddProject({
@@ -41,6 +45,25 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
       const newAmount = add ? safeCurrent + val : safeCurrent - val;
       onUpdateProject(id, { currentAmount: Math.max(0, newAmount) });
       setAmountInput({...amountInput, [id]: ''});
+  };
+
+  const handleInputChange = (id: string, value: string) => {
+       let val = value;
+       // Permite limpar o campo
+      if (val === '') {
+          setAmountInput({...amountInput, [id]: ''});
+          return;
+      }
+
+      // Regex para validar formato numérico básico (apenas números e ponto)
+      if (!/^\d*\.?\d*$/.test(val)) return;
+
+      // Remove zero à esquerda se houver mais números
+      if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
+          val = val.replace(/^0+/, '');
+      }
+      
+      setAmountInput({...amountInput, [id]: val});
   };
 
   const getProgress = (current: any, target: any) => {
@@ -107,21 +130,22 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                     <div className="flex justify-between items-end mb-6">
                         <div>
                             <p className="text-xs text-slate-400">Atual</p>
-                            <p className="text-xl font-bold text-white">R$ {current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-xl font-bold text-white">{formatCurrency(current)}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-xs text-slate-400">Meta</p>
-                            <p className="text-sm font-medium text-slate-300">R$ {target.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-sm font-medium text-slate-300">{formatCurrency(target)}</p>
                         </div>
                     </div>
 
                     <div className="mt-auto pt-4 border-t border-slate-700">
                         <div className="flex gap-2">
                             <input 
-                                type="number" 
+                                type="text"
+                                inputMode="decimal" 
                                 placeholder="Valor" 
                                 value={amountInput[proj.id] || ''}
-                                onChange={e => setAmountInput({...amountInput, [proj.id]: e.target.value})}
+                                onChange={e => handleInputChange(proj.id, e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:border-gold-500 focus:outline-none"
                             />
                             <button onClick={() => handleUpdateAmount(proj.id, current, true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 rounded font-bold text-lg">+</button>
