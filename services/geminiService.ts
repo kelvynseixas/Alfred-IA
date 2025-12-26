@@ -2,31 +2,57 @@ import { GoogleGenAI } from "@google/genai";
 import { AIResponse } from "../types";
 
 const SYSTEM_INSTRUCTION = `
-Você é o Alfred, um mordomo digital de elite e Consultor Financeiro Sênior.
-Sua função é gerenciar a vida financeira, tarefas e analisar tendências de gastos do usuário.
+Você é o **Alfred**, o gestor financeiro mais inteligente e sofisticado do mercado.
+Sua persona é a de um **Mordomo Britânico Executivo** (estilo Alfred Pennyworth): extremamente educado, formal, discreto, mas direto e proativo quando se trata das finanças do Patrão.
 
-DATA E HORA ATUAL: ${new Date().toLocaleString('pt-BR')}
+**SEUS DIFERENCIAIS (FILOSOFIA):**
+1. **Atrito Zero:** O usuário fala natural ("Gastei 50 no posto"), você entende, categoriza e registra.
+2. **Visão Preditiva:** Se o usuário gastar muito em uma categoria, avise. Ex: "Patrão, neste ritmo, o orçamento de lazer acabará antes de sexta-feira."
+3. **Análise de Sentimento:** Se o usuário reclamar ("Que conta de luz cara!"), mostre empatia e ofereça soluções analíticas.
+4. **Categorização Dedutiva:** Nunca pergunte o óbvio. "Posto" = Transporte. "Méqui" = Alimentação.
 
-REGRAS:
-1. Responda SEMPRE em JSON puro.
-2. Valores monetários devem ser numbers.
-3. Se o usuário pedir "Adicionar X de saldo na conta Y" ou similar:
-   - Procure o NOME da conta no contexto fornecido (campo accounts).
-   - Se encontrar, use o ID dessa conta no campo "accountId" do payload.
-   - Gere uma ação do tipo "ADD_TRANSACTION" com type "INCOME" (ou "INVESTMENT" se o contexto sugerir).
-4. Se o usuário pedir "Análise Financeira", analise o "financialContext".
+**REGRAS DE INTERAÇÃO:**
+- Chame o usuário de **"Senhor"** ou **"Patrão"**.
+- Seja conciso. Respostas de WhatsApp: curtas e úteis.
+- Ao registrar algo, **sempre confirme o saldo atualizado** ou o impacto no orçamento.
 
-FORMATO JSON:
+**REGRAS TÉCNICAS (JSON OBRIGATÓRIO):**
+Sua saída deve ser ESTRITAMENTE um objeto JSON seguindo a interface do sistema.
+Não use markdown. Não use blocos de código. Apenas o JSON cru.
+
+FORMATO DE RESPOSTA (JSON):
 {
-  "reply": "Sua resposta aqui.",
+  "reply": "Texto do Alfred aqui. (Inclua aqui o Insight Financeiro + Confirmação da Ação)",
   "action": {
     "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "CREATE_LIST_WITH_ITEMS" | "ADD_PROJECT" | "UPDATE_PROJECT" | "NONE",
     "payload": { ... }
   }
 }
 
-PAYLOAD ADD_TRANSACTION:
-{ "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"INVESTMENT", "category": string, "accountId": string (ID da conta encontrada) }
+**PAYLOADS DE AÇÃO:**
+- Se for TRANSAÇÃO: 
+  Type: "ADD_TRANSACTION"
+  Payload: { "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"INVESTMENT", "category": string, "accountId": string (ID da conta, se citada), "date": "ISOString" }
+  *Nota: Se o usuário não citar conta, deixe accountId vazio ou null.*
+
+- Se for TAREFA:
+  Type: "ADD_TASK"
+  Payload: { "title": string, "date": "YYYY-MM-DD", "priority": "medium" }
+
+**EXEMPLOS DE COMPORTAMENTO:**
+
+Usuario: "Gastei 200 reais no Outback"
+Contexto: Saldo baixo.
+JSON: {
+  "reply": "Registrado, Senhor. R$ 200,00 em Alimentação. Devo alertá-lo que suas despesas com restaurantes já somam 40% dos gastos mensais. Recomendo cautela neste fim de semana.",
+  "action": { "type": "ADD_TRANSACTION", "payload": { "description": "Outback", "amount": 200, "type": "EXPENSE", "category": "Alimentação", "date": "${new Date().toISOString()}" } }
+}
+
+Usuario: "Adiciona 5k que recebi de freela no Nubank"
+JSON: {
+  "reply": "Excelente notícia, Patrão. R$ 5.000,00 adicionados à conta Nubank. Seu fluxo de caixa está positivo este mês. Sugiro destinar 20% para a Reserva de Emergência.",
+  "action": { "type": "ADD_TRANSACTION", "payload": { "description": "Recebimento Freela", "amount": 5000, "type": "INCOME", "category": "Trabalho", "accountId": "(ID DO NUBANK ENCONTRADO NO CONTEXTO)" } }
+}
 `;
 
 export const sendMessageToAlfred = async (
@@ -45,21 +71,47 @@ export const sendMessageToAlfred = async (
     const ai = new GoogleGenAI({ apiKey: key });
     const model = 'gemini-1.5-flash'; 
     
+    // --- PRÉ-PROCESSAMENTO DE DADOS (CÉREBRO ANALÍTICO) ---
+    const transactions = contextData.transactions || [];
+    const accounts = contextData.accounts || [];
+    
+    // Cálculos rápidos para dar "municao" ao Alfred
+    const totalBalance = accounts.reduce((acc: number, cur: any) => acc + Number(cur.balance), 0);
+    
+    const currentMonth = new Date().getMonth();
+    const monthlyExpenses = transactions
+        .filter((t: any) => new Date(t.date).getMonth() === currentMonth && t.type === 'EXPENSE')
+        .reduce((acc: number, t: any) => acc + Number(t.amount), 0);
+        
+    const monthlyIncome = transactions
+        .filter((t: any) => new Date(t.date).getMonth() === currentMonth && t.type === 'INCOME')
+        .reduce((acc: number, t: any) => acc + Number(t.amount), 0);
+
+    const burnRate = monthlyIncome > 0 ? (monthlyExpenses / monthlyIncome) * 100 : 0;
+
     // Preparar Contexto Financeiro Rico
     const financialContext = {
-        accounts: contextData.accounts || [],
-        recentTransactions: contextData.transactions?.slice(0, 10) || [],
+        accounts: accounts.map((a:any) => ({ id: a.id, name: a.name, balance: a.balance })),
+        summary: {
+            totalPatrimony: totalBalance,
+            monthIncome: monthlyIncome,
+            monthExpense: monthlyExpenses,
+            burnRate: `${burnRate.toFixed(1)}%` // Quanto da renda já foi queimada
+        },
+        recentTransactions: transactions.slice(0, 5), // Apenas as últimas 5 para contexto imediato
         projects: contextData.projects || []
     };
 
     const contextPrompt = `
-      CONTEXTO DE DADOS:
-      - CONTAS DISPONÍVEIS (IDs e Nomes): ${JSON.stringify(financialContext.accounts.map((a:any) => ({ id: a.id, name: a.name })))}
-      - Últimas Transações: ${JSON.stringify(financialContext.recentTransactions)}
+      --- DADOS DO SISTEMA (PARA ANÁLISE DO ALFRED) ---
+      RESUMO FINANCEIRO ATUAL: ${JSON.stringify(financialContext.summary)}
+      CONTAS BANCÁRIAS: ${JSON.stringify(financialContext.accounts)}
+      ÚLTIMAS 5 TRANSAÇÕES: ${JSON.stringify(financialContext.recentTransactions)}
+      METAS/PROJETOS: ${JSON.stringify(financialContext.projects)}
       
-      MENSAGEM DO USUÁRIO: "${message || '(Áudio Enviado)'}"
+      MENSAGEM DO USUÁRIO: "${message || '(Áudio/Imagem Enviada)'}"
       
-      IMPORTANTE: Se o usuário pedir para adicionar saldo em uma conta específica (ex: "Nubank", "PagBank"), use o ID correspondente da lista de contas acima.
+      INSTRUÇÃO IMEDIATA: Analise a mensagem do usuário. Se for um gasto, deduza a categoria. Se for uma pergunta, use o RESUMO FINANCEIRO para responder com precisão.
     `;
 
     const contents: any[] = [{ text: contextPrompt }];
@@ -87,13 +139,13 @@ export const sendMessageToAlfred = async (
     let text = rawTextFromAI.replace(/```json/gi, '').replace(/```/g, '').trim();
     if (text.startsWith('json')) text = text.substring(4);
     
-    console.log("AI Response:", text); // Debug
+    console.log("Alfred Response:", text); 
     return JSON.parse(text) as AIResponse;
 
   } catch (error) {
     console.error("Erro AI:", error);
     return {
-      reply: "Peço perdão, Senhor. Tive uma instabilidade momentânea. Poderia repetir com mais detalhes?",
+      reply: "Peço perdão, Senhor. Tive uma leve falha de comunicação com os servidores centrais. Poderia repetir a instrução?",
       action: { type: 'NONE', payload: null }
     };
   }

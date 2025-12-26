@@ -24,7 +24,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
     {
       id: 'init',
       sender: 'alfred',
-      text: "Olá. Sou o Alfred, seu gestor pessoal do ecossistema. Como posso ser útil hoje? Você pode pedir para adicionar tarefas, registrar despesas ou atualizar suas listas.",
+      text: "Olá, Senhor. Sou o Alfred. Como estão as suas finanças hoje? Posso registrar despesas, analisar seu fluxo de caixa ou agendar compromissos. Basta dizer.",
       timestamp: new Date()
     }
   ]);
@@ -180,7 +180,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       const errorMsg: Message = {
         id: Date.now().toString(),
         sender: 'alfred',
-        text: "Peço perdão, estou com dificuldades de conexão no momento.",
+        text: "Peço perdão, Senhor. Estou com dificuldades momentâneas de conexão com meus serviços cognitivos.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -284,7 +284,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
              <div className="flex justify-start">
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-bl-none px-4 py-3 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 text-gold-500 animate-spin" />
-                    <span className="text-xs text-slate-400">Alfred está ouvindo e pensando...</span>
+                    <span className="text-xs text-slate-400">Alfred está analisando...</span>
                 </div>
              </div>
         )}
@@ -321,7 +321,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={isRecording ? "Gravando áudio..." : "Mensagem para Alfred..."}
+                placeholder={isRecording ? "Ouvindo..." : "Diga, Patrão..."}
                 disabled={isRecording}
                 className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-slate-500 disabled:opacity-50"
             />
@@ -343,7 +343,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
             )}
         </div>
         <p className="text-center text-[10px] text-slate-600 mt-2">
-            Respostas geradas por IA. Alfred pode cometer equívocos.
+            Alfred IA v2.0 - Consultoria Financeira & Gestão
         </p>
       </div>
     </div>
