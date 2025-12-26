@@ -273,6 +273,12 @@ app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
 app.post('/api/lists', authenticateToken, async (req, res) => {
     try { const r = await pool.query('INSERT INTO list_groups (user_id, name) VALUES ($1, $2) RETURNING *', [req.user.id, req.body.name]); res.json({...r.rows[0], items:[]}); } catch(e) { res.sendStatus(500); }
 });
+app.patch('/api/lists/:id', authenticateToken, async (req, res) => {
+    try { await pool.query('UPDATE list_groups SET name = $1 WHERE id = $2 AND user_id = $3', [req.body.name, req.params.id, req.user.id]); res.json({success:true}); } catch(e) { res.sendStatus(500); }
+});
+app.delete('/api/lists/:id', authenticateToken, async (req, res) => {
+    try { await pool.query('DELETE FROM list_groups WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]); res.json({success:true}); } catch(e) { res.sendStatus(500); }
+});
 app.post('/api/lists/:id/items', authenticateToken, async (req, res) => {
     try { const r = await pool.query('INSERT INTO list_items (list_id, name) VALUES ($1, $2) RETURNING *', [req.params.id, req.body.name]); res.json(r.rows[0]); } catch(e) { res.sendStatus(500); }
 });
