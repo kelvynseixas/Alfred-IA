@@ -53,7 +53,8 @@ JSON: { "reply": "Criei a lista 'Obras' com os itens solicitados.", "action": { 
 export const sendMessageToAlfred = async (
   message: string,
   contextData: any,
-  imageBase64?: string
+  imageBase64?: string,
+  audioBase64?: string
 ): Promise<AIResponse> => {
   let rawTextFromAI = '';
   try {
@@ -63,12 +64,12 @@ export const sendMessageToAlfred = async (
     }
 
     const ai = new GoogleGenAI({ apiKey: key });
-    const model = 'gemini-3-flash-preview'; 
+    const model = 'gemini-2.5-flash-latest'; // Modelo com melhor suporte multimodal (Áudio/Imagem)
     
     // Contexto simplificado
     const tasksSimple = contextData.tasks.map((t:any) => ({ id: t.id, title: t.title, date: t.date })).slice(0, 5);
     const listsSimple = contextData.lists ? contextData.lists.map((l:any) => ({ id: l.id, name: l.name })) : [];
-    const projectsSimple = contextData.projects ? contextData.projects.map((p:any) => ({ id: p.id, title: p.title, currentAmount: p.currentAmount })) : [];
+    const projectsSimple = contextData.projects ? contextData.projects.map((p:any) => ({ id: p.id, title: p.title, currentAmount: p.currentAmount, targetAmount: p.targetAmount })) : [];
     
     const contextPrompt = `
       CONTEXTO DO USUÁRIO:
@@ -76,19 +77,32 @@ export const sendMessageToAlfred = async (
       - Tarefas Recentes: ${JSON.stringify(tasksSimple)}
       - Listas Disponíveis: ${JSON.stringify(listsSimple)}
       
-      MENSAGEM DO USUÁRIO: "${message}"
+      MENSAGEM/ÁUDIO DO USUÁRIO: "${message || '(Áudio Enviado)'}"
     `;
 
-    // Montar conteúdo (Texto + Imagem Opcional)
+    // Montar conteúdo (Texto + Imagem/Áudio Opcional)
     const contents: any[] = [{ text: contextPrompt }];
     
     if (imageBase64) {
-        // Remove header do base64 se existir (data:image/png;base64,)
-        const base64Data = imageBase64.split(',')[1] || imageBase64;
+        // Remove header do base64 se existir
+        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
         contents.push({
             inlineData: {
                 mimeType: "image/jpeg",
-                data: base64Data
+                data: cleanBase64
+            }
+        });
+    }
+
+    if (audioBase64) {
+        // Remove header do base64 se existir
+        const cleanAudio = audioBase64.split(',')[1] || audioBase64;
+        contents.push({
+            inlineData: {
+                // Gemini aceita mp3, wav, aac, etc. O MediaRecorder geralmente gera webm ou mp4.
+                // 'audio/webm' é seguro para chrome/firefox recorders.
+                mimeType: "audio/webm", 
+                data: cleanAudio
             }
         });
     }
@@ -107,7 +121,7 @@ export const sendMessageToAlfred = async (
     let text = rawTextFromAI.replace(/```json/gi, '').replace(/```/g, '').trim();
     if (text.startsWith('json')) text = text.substring(4);
     
-    console.log("Resposta da IA (após limpeza):", text); // Log para depuração
+    console.log("Resposta da IA (após limpeza):", text);
     return JSON.parse(text) as AIResponse;
 
   } catch (error) {

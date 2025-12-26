@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToAlfred } from '../services/geminiService';
-import { Mic, Send, Paperclip, Loader2, User as UserIcon, X, Image as ImageIcon } from 'lucide-react';
+import { Mic, Send, Paperclip, Loader2, User as UserIcon, X, Image as ImageIcon, Square } from 'lucide-react';
 import { ALFRED_ICON_URL } from '../App';
 
 interface AlfredChatProps {
@@ -16,6 +16,7 @@ interface Message {
   text: string;
   timestamp: Date;
   imageUrl?: string;
+  audioUrl?: string; // Para reproduzir o áudio enviado
 }
 
 export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, isOpen, onClose }) => {
@@ -30,7 +31,11 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [isListening, setIsListening] = useState(false);
+  
+  // Audio Recording States
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,25 +48,44 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
     scrollToBottom();
   }, [messages, isOpen]);
 
-  const handleSend = async () => {
-    if (!input.trim() && !selectedImage) return;
+  const handleSend = async (audioBlob?: Blob) => {
+    if (!input.trim() && !selectedImage && !audioBlob) return;
+
+    let audioBase64 = '';
+    let audioPreviewUrl = '';
+
+    if (audioBlob) {
+        audioPreviewUrl = URL.createObjectURL(audioBlob);
+        // Converter Blob para Base64
+        audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(audioBlob);
+        });
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: 'user',
       text: input,
       imageUrl: selectedImage || undefined,
+      audioUrl: audioPreviewUrl || undefined,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     const imageToSend = selectedImage;
-    setSelectedImage(null); // Clear image immediately after sending UI update
+    setSelectedImage(null); 
     setLoading(true);
 
     try {
-      const response = await sendMessageToAlfred(userMsg.text, appContext, imageToSend || undefined);
+      const response = await sendMessageToAlfred(
+          userMsg.text, 
+          appContext, 
+          imageToSend || undefined,
+          audioBase64 || undefined
+      );
       
       const alfredMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -100,25 +124,39 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       }
   };
 
-  const startListening = () => {
-      if (!('webkitSpeechRecognition' in window)) {
-          alert('Seu navegador não suporta reconhecimento de voz.');
-          return;
+  const startRecording = async () => {
+      try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new MediaRecorder(stream);
+          mediaRecorderRef.current = mediaRecorder;
+          audioChunksRef.current = [];
+
+          mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                  audioChunksRef.current.push(event.data);
+              }
+          };
+
+          mediaRecorder.onstop = () => {
+              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+              handleSend(audioBlob);
+              // Parar todas as tracks para liberar o microfone
+              stream.getTracks().forEach(track => track.stop());
+          };
+
+          mediaRecorder.start();
+          setIsRecording(true);
+      } catch (err) {
+          alert("Não foi possível acessar o microfone.");
+          console.error(err);
       }
-      
-      const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.lang = 'pt-BR';
-      recognition.continuous = false;
-      recognition.interimResults = false;
+  };
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInput(prev => prev + (prev ? ' ' : '') + transcript);
-      };
-
-      recognition.start();
+  const stopRecording = () => {
+      if (mediaRecorderRef.current && isRecording) {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+      }
   };
 
   if (!isOpen) return null;
@@ -157,7 +195,12 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                       <img src={msg.imageUrl} alt="Anexo" className="w-full h-auto max-h-48 object-cover" />
                   </div>
               )}
-              {msg.text}
+              {msg.audioUrl && (
+                  <div className="mb-1">
+                      <audio controls src={msg.audioUrl} className="w-full h-8" />
+                  </div>
+              )}
+              {msg.text && <p>{msg.text}</p>}
             </div>
           </div>
         ))}
@@ -165,14 +208,14 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
              <div className="flex justify-start">
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-bl-none px-4 py-3 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 text-gold-500 animate-spin" />
-                    <span className="text-xs text-slate-400">Alfred está pensando...</span>
+                    <span className="text-xs text-slate-400">Alfred está ouvindo e pensando...</span>
                 </div>
              </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area - WhatsApp Style */}
+      {/* Input Area */}
       <div className="p-4 bg-slate-900 border-t border-slate-800">
         {selectedImage && (
             <div className="mb-2 p-2 bg-slate-800 rounded-lg flex items-center justify-between border border-slate-700">
@@ -202,19 +245,24 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Mensagem para Alfred..."
-                className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-slate-500"
+                placeholder={isRecording ? "Gravando áudio..." : "Mensagem para Alfred..."}
+                disabled={isRecording}
+                className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-slate-500 disabled:opacity-50"
             />
             {input.trim() || selectedImage ? (
                 <button 
-                    onClick={handleSend}
+                    onClick={() => handleSend()}
                     className="p-2 bg-gold-600 hover:bg-gold-500 text-white rounded-full transition-colors"
                 >
                     <Send className="w-4 h-4" />
                 </button>
             ) : (
-                <button onClick={startListening} className={`p-2 transition-colors rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>
-                    <Mic className="w-5 h-5" />
+                <button 
+                    onClick={isRecording ? stopRecording : startRecording} 
+                    className={`p-2 transition-all rounded-full ${isRecording ? 'bg-red-500 text-white animate-pulse scale-110 shadow-lg shadow-red-500/50' : 'text-slate-400 hover:text-white'}`}
+                    title={isRecording ? "Parar Gravação" : "Gravar Áudio"}
+                >
+                    {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-5 h-5" />}
                 </button>
             )}
         </div>
