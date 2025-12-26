@@ -50,6 +50,8 @@ export interface Transaction {
   category: string;
   date: string;
   recurrencePeriod: RecurrencePeriod;
+  recurrenceInterval?: number;
+  recurrenceCount?: number;
 }
 
 export interface Investment {
@@ -92,6 +94,8 @@ export interface Task {
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
   recurrencePeriod: RecurrencePeriod;
+  recurrenceInterval?: number;
+  recurrenceCount?: number;
 }
 
 export enum ItemStatus {
@@ -113,7 +117,6 @@ export interface ListGroup {
   items: ListItem[];
 }
 
-// Added missing PaymentHistory interface to fix import error in UserProfile.tsx
 export interface PaymentHistory {
   id: string;
   date: string;
@@ -134,7 +137,6 @@ export interface User {
   active: boolean;
   isTestUser?: boolean;
   trialEndsAt?: string;
-  // Use defined PaymentHistory interface instead of any[]
   paymentHistory?: PaymentHistory[];
   modules: ModuleType[];
 }

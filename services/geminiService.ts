@@ -1,9 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { AIResponse } from "../types";
 
 const SYSTEM_INSTRUCTION = `
-Você é o **Alfred**, o gestor financeiro mais inteligente do mercado, superior a ferramentas como Organizze e Poupa. 
+Você é o **Alfred**, o gestor financeiro mais inteligente do mercado, superior a ferramentas como Organizze e Poupa.ai. 
 Seu diferencial é ser um **Mordomo Executivo**, não apenas um contador.
 
 **1. FILOSOFIA DE PRODUTO:**
@@ -26,7 +25,7 @@ Retorne APENAS um objeto JSON. Sem markdown.
 }
 
 **AÇÕES DISPONÍVEIS:**
-- ADD_TRANSACTION: { "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"RESERVE", "category": string, "accountId": string, "projectId": string (se for RESERVE), "recurrencePeriod": "NONE"|"DAILY"|"WEEKLY"|"MONTHLY"|"YEARLY" }
+- ADD_TRANSACTION: { "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"RESERVE", "category": string, "accountId": string, "projectId": string (se for RESERVE), "recurrencePeriod": "NONE"|"DAILY"|"WEEKLY"|"MONTHLY"|"YEARLY", "recurrenceInterval": number, "recurrenceCount": number }
 - ADD_INVESTMENT: { "name": string, "type": "CDB"|"TESOURO"|"ACOES"|..., "institution": string, "initialAmount": number, "interestRate": string, "startDate": "ISOString" }
 - ADD_TASK: { "title": string, "date": "ISOString", "priority": "low"|"medium"|"high", "recurrencePeriod": "NONE"|... }
 
@@ -35,13 +34,17 @@ Se o Patrão pedir para criar algo, identifique os dados. Se faltar a conta, per
 
 export const sendMessageToAlfred = async (
   message: string,
-  contextData: any
+  contextData: any,
+  imageBase64?: string,
+  audioBase64?: string
 ): Promise<AIResponse> => {
   try {
-    // Initializing Gemini API with direct process.env.API_KEY access
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = sessionStorage.getItem('VITE_GEMINI_KEY');
+    if (!key) {
+        return { reply: "Perdão, Senhor. Minha chave de ativação não foi configurada no Painel Master.", action: { type: 'NONE', payload: null } };
+    }
+    const ai = new GoogleGenAI({ apiKey: key });
     
-    // Enriquecer contexto para a IA
     const contextPrompt = `
       CONTEXTO ATUAL:
       - Contas: ${JSON.stringify(contextData.accounts)}
@@ -49,24 +52,33 @@ export const sendMessageToAlfred = async (
       - Investimentos: ${JSON.stringify(contextData.investments)}
       - Tarefas: ${JSON.stringify(contextData.tasks)}
       
-      DADOS DO PATRÃO: "${message}"
+      MENSAGEM DO PATRÃO: "${message || '(Áudio/Imagem Enviada)'}"
       
       Se ele mencionar um projeto como "Celular" ou conta como "Nubank", localize o ID no contexto acima.
     `;
+    
+    const contents: any[] = [{ text: contextPrompt }];
+    if (imageBase64) {
+        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+        contents.push({ inlineData: { mimeType: "image/jpeg", data: cleanBase64 } });
+    }
+    if (audioBase64) {
+        const cleanAudio = audioBase64.includes('base64,') ? audioBase64.split('base64,')[1] : audioBase64;
+        contents.push({ inlineData: { mimeType: "audio/webm", data: cleanAudio } });
+    }
 
-    // Using simplified generateContent structure for basic text task
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: contextPrompt,
+      model: 'gemini-1.5-flash',
+      contents: contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
       },
     });
 
-    // Directly accessing .text property of GenerateContentResponse
     const resultText = response.text || "{}";
-    return JSON.parse(resultText) as AIResponse;
+    const cleanJson = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
+    return JSON.parse(cleanJson) as AIResponse;
   } catch (error) {
     console.error("Erro na comunicação com o Alfred:", error);
     return {
