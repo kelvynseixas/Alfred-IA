@@ -208,6 +208,7 @@ export type AIActionType =
   | 'UPDATE_TASK'
   | 'ADD_LIST_ITEM' 
   | 'COMPLETE_LIST_ITEM'
+  | 'ADD_PROJECT'
   | 'NONE';
 
 export interface AIResponse {
