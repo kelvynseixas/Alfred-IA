@@ -205,7 +205,7 @@ export interface SystemConfig {
 export type AIActionType = 
   | 'ADD_TRANSACTION' 
   | 'ADD_TASK' 
-  | 'UPDATE_TASK'
+  | 'UPDATE_TASK' 
   | 'ADD_LIST_ITEM' 
   | 'COMPLETE_LIST_ITEM'
   | 'ADD_PROJECT'
