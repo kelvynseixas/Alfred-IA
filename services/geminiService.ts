@@ -10,17 +10,23 @@ DATA E HORA ATUAL: ${new Date().toLocaleString('pt-BR')}
 REGRAS:
 1. Responda SEMPRE em JSON puro.
 2. Valores monetários devem ser numbers.
-3. Se o usuário pedir "Análise Financeira", "Como estão minhas contas" ou "Dica de economia", analise o "financialContext" fornecido e dê uma resposta em "reply" com insights valiosos.
-4. Para ações (criar tarefa, transação), use o campo "action".
+3. Se o usuário pedir "Adicionar X de saldo na conta Y" ou similar:
+   - Procure o NOME da conta no contexto fornecido (campo accounts).
+   - Se encontrar, use o ID dessa conta no campo "accountId" do payload.
+   - Gere uma ação do tipo "ADD_TRANSACTION" com type "INCOME" (ou "INVESTMENT" se o contexto sugerir).
+4. Se o usuário pedir "Análise Financeira", analise o "financialContext".
 
 FORMATO JSON:
 {
-  "reply": "Sua resposta aqui. Se for análise financeira, seja detalhista mas elegante.",
+  "reply": "Sua resposta aqui.",
   "action": {
     "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "CREATE_LIST_WITH_ITEMS" | "ADD_PROJECT" | "UPDATE_PROJECT" | "NONE",
     "payload": { ... }
   }
 }
+
+PAYLOAD ADD_TRANSACTION:
+{ "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"INVESTMENT", "category": string, "accountId": string (ID da conta encontrada) }
 `;
 
 export const sendMessageToAlfred = async (
@@ -37,7 +43,6 @@ export const sendMessageToAlfred = async (
     }
 
     const ai = new GoogleGenAI({ apiKey: key });
-    // Usando 1.5-flash para máxima estabilidade e compatibilidade com chaves antigas e novas
     const model = 'gemini-1.5-flash'; 
     
     // Preparar Contexto Financeiro Rico
@@ -48,16 +53,13 @@ export const sendMessageToAlfred = async (
     };
 
     const contextPrompt = `
-      CONTEXTO FINANCEIRO E TAREFAS:
-      - Contas/Saldos: ${JSON.stringify(financialContext.accounts)}
+      CONTEXTO DE DADOS:
+      - CONTAS DISPONÍVEIS (IDs e Nomes): ${JSON.stringify(financialContext.accounts.map((a:any) => ({ id: a.id, name: a.name })))}
       - Últimas Transações: ${JSON.stringify(financialContext.recentTransactions)}
-      - Projetos/Metas: ${JSON.stringify(financialContext.projects)}
-      - Tarefas Pendentes: ${JSON.stringify(contextData.tasks?.slice(0,5))}
       
       MENSAGEM DO USUÁRIO: "${message || '(Áudio Enviado)'}"
       
-      Se o usuário perguntar sobre saldo, use os dados de 'Contas'.
-      Se perguntar onde gastou mais, analise 'Últimas Transações'.
+      IMPORTANTE: Se o usuário pedir para adicionar saldo em uma conta específica (ex: "Nubank", "PagBank"), use o ID correspondente da lista de contas acima.
     `;
 
     const contents: any[] = [{ text: contextPrompt }];
@@ -85,12 +87,13 @@ export const sendMessageToAlfred = async (
     let text = rawTextFromAI.replace(/```json/gi, '').replace(/```/g, '').trim();
     if (text.startsWith('json')) text = text.substring(4);
     
+    console.log("AI Response:", text); // Debug
     return JSON.parse(text) as AIResponse;
 
   } catch (error) {
     console.error("Erro AI:", error);
     return {
-      reply: "Peço perdão, Senhor. Tive uma instabilidade momentânea. Poderia repetir?",
+      reply: "Peço perdão, Senhor. Tive uma instabilidade momentânea. Poderia repetir com mais detalhes?",
       action: { type: 'NONE', payload: null }
     };
   }

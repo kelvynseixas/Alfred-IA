@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Transaction, TransactionType, DateRangeOption, RecurrencePeriod, Account } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { X, List, Trash2, Edit2, CalendarRange, Repeat, ArrowUpCircle, ArrowDownCircle, Target, Plus, Wallet, Landmark, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
+import { X, List, Trash2, Edit2, CalendarRange, Repeat, ArrowUpCircle, ArrowDownCircle, Target, Plus, Wallet, Landmark, CreditCard, DollarSign, TrendingUp, MoreVertical } from 'lucide-react';
 
 interface FinancialModuleProps {
   transactions: Transaction[];
@@ -15,11 +15,11 @@ interface FinancialModuleProps {
 
 const COLORS_EXPENSE = ['#ef4444', '#f87171', '#b91c1c', '#991b1b', '#fca5a5'];
 const COLORS_INCOME = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
-const COLORS_INVEST = ['#f59e0b', '#fbbf24', '#d97706', '#b45309', '#fcd34d'];
 
 export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, accounts = [], onAddTransaction, onEditTransaction, onDeleteTransaction, onAddAccount, isDarkMode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   
   // Forms
   const [newTrans, setNewTrans] = useState<{description: string, amount: string, type: TransactionType, category: string, recurrencePeriod: RecurrencePeriod, accountId: string }>({ 
@@ -27,21 +27,61 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   });
   const [newAccount, setNewAccount] = useState({ name: '', type: 'CHECKING', balance: '', color: '#3b82f6' });
 
-  const [dateRange, setDateRange] = useState<DateRangeOption>('30D');
-
   const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Calcular Saldo Total (Soma das Contas)
+  // --- CÁLCULOS ---
+  // 1. Saldo Total (Soma das Contas)
   const totalBalance = accounts.reduce((acc, curr) => acc + parseFloat(curr.balance.toString()), 0);
+
+  // 2. Resumos (Entradas, Saídas, Investimentos) - Baseado nas transações visíveis
+  const incomeTotal = transactions
+    .filter(t => t.type === TransactionType.INCOME)
+    .reduce((acc, t) => acc + parseFloat(t.amount.toString()), 0);
+
+  const expenseTotal = transactions
+    .filter(t => t.type === TransactionType.EXPENSE)
+    .reduce((acc, t) => acc + parseFloat(t.amount.toString()), 0);
+
+  const investmentTotal = transactions
+    .filter(t => t.type === TransactionType.INVESTMENT)
+    .reduce((acc, t) => acc + parseFloat(t.amount.toString()), 0);
+
+  // --- HANDLERS ---
+  const openNewTransaction = () => {
+      setEditingTransactionId(null);
+      setNewTrans({ description: '', amount: '', type: TransactionType.EXPENSE, category: '', recurrencePeriod: 'NONE', accountId: '' });
+      setIsModalOpen(true);
+  };
+
+  const openEditTransaction = (t: Transaction) => {
+      setEditingTransactionId(t.id);
+      setNewTrans({
+          description: t.description,
+          amount: t.amount.toString(),
+          type: t.type,
+          category: t.category,
+          recurrencePeriod: t.recurrencePeriod || 'NONE',
+          accountId: t.accountId || ''
+      });
+      setIsModalOpen(true);
+  };
 
   const handleSubmitTransaction = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddTransaction({
+    const payload: any = {
         ...newTrans,
         amount: parseFloat(newTrans.amount),
-        recurrenceInterval: 1,
-        recurrenceLimit: 0
-    } as any);
+    };
+
+    if (editingTransactionId) {
+        onEditTransaction(editingTransactionId, payload);
+    } else {
+        onAddTransaction({
+            ...payload,
+            recurrenceInterval: 1,
+            recurrenceLimit: 0
+        });
+    }
     setIsModalOpen(false);
   };
 
@@ -68,15 +108,40 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
           </div>
           <div className="relative z-10 flex gap-2">
                <button onClick={() => setIsAccountModalOpen(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg transition-transform active:scale-95">
-                   <Plus size={16} /> Nova Conta
+                   <Plus size={16} /> Conta
                </button>
-               <button onClick={() => setIsModalOpen(true)} className="bg-gold-600 hover:bg-gold-500 text-slate-900 px-6 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg transition-transform active:scale-95">
+               <button onClick={openNewTransaction} className="bg-gold-600 hover:bg-gold-500 text-slate-900 px-6 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg transition-transform active:scale-95">
                    <Plus size={16} /> Transação
                </button>
           </div>
       </div>
 
-      {/* 2. LISTA DE CONTAS (CARDS) */}
+      {/* 2. CARDS DE RESUMO (ENTRADA, SAÍDA, INVESTIMENTO) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
+              <div>
+                  <p className="text-slate-400 text-xs font-bold uppercase mb-1">Entradas</p>
+                  <p className="text-xl font-bold text-emerald-400">+{formatCurrency(incomeTotal)}</p>
+              </div>
+              <div className="p-3 rounded-full bg-emerald-500/20 text-emerald-500"><ArrowUpCircle size={24} /></div>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
+              <div>
+                  <p className="text-slate-400 text-xs font-bold uppercase mb-1">Saídas</p>
+                  <p className="text-xl font-bold text-red-400">-{formatCurrency(expenseTotal)}</p>
+              </div>
+              <div className="p-3 rounded-full bg-red-500/20 text-red-500"><ArrowDownCircle size={24} /></div>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
+              <div>
+                  <p className="text-slate-400 text-xs font-bold uppercase mb-1">Reservas/Invest.</p>
+                  <p className="text-xl font-bold text-blue-400">{formatCurrency(investmentTotal)}</p>
+              </div>
+              <div className="p-3 rounded-full bg-blue-500/20 text-blue-500"><TrendingUp size={24} /></div>
+          </div>
+      </div>
+
+      {/* 3. LISTA DE CONTAS (CARDS) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {accounts.map(acc => (
               <div key={acc.id} className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex flex-col justify-between hover:border-slate-500 transition-colors group">
@@ -88,34 +153,49 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                   </div>
                   <div>
                       <h4 className="text-slate-300 font-medium truncate">{acc.name}</h4>
-                      <p className={`text-xl font-bold ${acc.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(parseFloat(acc.balance.toString()))}</p>
+                      <p className={`text-xl font-bold ${acc.balance >= 0 ? 'text-white' : 'text-red-400'}`}>{formatCurrency(parseFloat(acc.balance.toString()))}</p>
                   </div>
               </div>
           ))}
-          {accounts.length === 0 && (
-              <div className="col-span-full text-center py-4 text-slate-500 text-sm border border-dashed border-slate-700 rounded-xl">
-                  Nenhuma conta cadastrada. Adicione uma para começar.
-              </div>
-          )}
       </div>
 
-      {/* 3. GRÁFICOS E ANÁLISES (TRENDS) */}
+      {/* 4. GRÁFICOS E ANÁLISES */}
       <h3 className="text-lg font-serif text-white mt-4">Análise de Tendências</h3>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+           {/* GRÁFICO DE BARRAS - Cores Corrigidas e Texto Branco */}
            <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 lg:col-span-2">
                 <h4 className="text-xs font-bold uppercase text-slate-400 mb-4">Fluxo de Caixa (Últimos Lançamentos)</h4>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={transactions.slice(0, 10).reverse()}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                            <XAxis dataKey="date" tickFormatter={d => new Date(d).getDate().toString()} stroke="#64748b" />
-                            <YAxis stroke="#64748b" fontSize={10} />
-                            <Tooltip contentStyle={{backgroundColor: '#0f172a', border: 'none'}} formatter={(val:number) => formatCurrency(val)} />
-                            <Bar dataKey="amount" fill="#d97706" radius={[4, 4, 0, 0]} />
+                            <XAxis 
+                                dataKey="date" 
+                                tickFormatter={d => new Date(d).getDate().toString()} 
+                                stroke="#94a3b8" 
+                                tick={{ fill: '#e2e8f0' }} 
+                            />
+                            <YAxis 
+                                stroke="#94a3b8" 
+                                fontSize={10} 
+                                tick={{ fill: '#e2e8f0' }}
+                            />
+                            <Tooltip 
+                                contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff'}} 
+                                formatter={(val:number) => formatCurrency(val)} 
+                                itemStyle={{ color: '#fff' }}
+                            />
+                            <Bar dataKey="amount">
+                                {transactions.slice(0, 10).reverse().map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.type === 'INCOME' ? '#10b981' : '#ef4444'} />
+                                ))}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
            </div>
+           
+           {/* GRÁFICO DE PIZZA */}
            <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center justify-center">
                 <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Distribuição</h4>
                 <div className="w-full h-48">
@@ -128,26 +208,26 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                                  <Cell fill="#ef4444" />
                                  <Cell fill="#10b981" />
                              </Pie>
-                             <Tooltip contentStyle={{backgroundColor: '#0f172a', border: 'none'}} />
+                             <Tooltip contentStyle={{backgroundColor: '#0f172a', border: 'none', color: '#fff'}} />
                          </PieChart>
                     </ResponsiveContainer>
                 </div>
                 <div className="flex gap-4 text-xs">
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entradas</div>
-                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> Saídas</div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> <span className="text-slate-300">Entradas</span></div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> <span className="text-slate-300">Saídas</span></div>
                 </div>
            </div>
       </div>
 
-      {/* 4. HISTÓRICO RECENTE */}
+      {/* 5. HISTÓRICO DE TRANSAÇÕES (Com Edição e Exclusão) */}
       <div>
           <h3 className="text-lg font-serif text-white mb-4">Últimas Transações</h3>
           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-              {transactions.slice(0, 5).map(t => (
-                  <div key={t.id} className="p-4 border-b border-slate-700 flex justify-between items-center hover:bg-slate-700/30 transition-colors">
+              {transactions.slice(0, 10).map(t => (
+                  <div key={t.id} className="p-4 border-b border-slate-700 flex justify-between items-center hover:bg-slate-700/30 transition-colors group">
                       <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-full ${t.type === 'INCOME' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
-                              {t.type === 'INCOME' ? <ArrowUpCircle size={20}/> : <ArrowDownCircle size={20}/>}
+                          <div className={`p-2 rounded-full ${t.type === 'INCOME' ? 'bg-emerald-500/20 text-emerald-500' : t.type === 'INVESTMENT' ? 'bg-blue-500/20 text-blue-500' : 'bg-red-500/20 text-red-500'}`}>
+                              {t.type === 'INCOME' ? <ArrowUpCircle size={20}/> : t.type === 'INVESTMENT' ? <TrendingUp size={20}/> : <ArrowDownCircle size={20}/>}
                           </div>
                           <div>
                               <p className="text-white font-medium">{t.description}</p>
@@ -159,19 +239,29 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                               </div>
                           </div>
                       </div>
-                      <span className={`font-bold ${t.type === 'INCOME' ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {t.type === 'EXPENSE' ? '-' : '+'}{formatCurrency(t.amount)}
-                      </span>
+                      <div className="flex items-center gap-4">
+                          <span className={`font-bold ${t.type === 'INCOME' ? 'text-emerald-400' : t.type === 'INVESTMENT' ? 'text-blue-400' : 'text-red-400'}`}>
+                              {t.type === 'EXPENSE' ? '-' : '+'}{formatCurrency(t.amount)}
+                          </span>
+                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => openEditTransaction(t)} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 hover:text-white" title="Editar">
+                                  <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => onDeleteTransaction(t.id)} className="p-1.5 bg-slate-700 hover:bg-red-600/20 rounded text-slate-300 hover:text-red-400" title="Excluir">
+                                  <Trash2 size={14} />
+                              </button>
+                          </div>
+                      </div>
                   </div>
               ))}
           </div>
       </div>
 
-      {/* MODAL NOVA TRANSAÇÃO */}
+      {/* MODAL TRANSAÇÃO (NOVA/EDITAR) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
-                <h3 className="text-xl font-serif text-white mb-4">Nova Transação</h3>
+                <h3 className="text-xl font-serif text-white mb-4">{editingTransactionId ? 'Editar Transação' : 'Nova Transação'}</h3>
                 <form onSubmit={handleSubmitTransaction} className="space-y-4">
                     <input placeholder="Descrição" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" required />
                     <input type="number" placeholder="Valor (R$)" value={newTrans.amount} onChange={e => setNewTrans({...newTrans, amount: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" required />
@@ -187,7 +277,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
                          </select>
                     </div>
                     <input placeholder="Categoria (ex: Mercado)" value={newTrans.category} onChange={e => setNewTrans({...newTrans, category: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" />
-                    <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-3 rounded mt-2">Salvar</button>
+                    <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-3 rounded mt-2">{editingTransactionId ? 'Atualizar' : 'Salvar'}</button>
                     <button type="button" onClick={() => setIsModalOpen(false)} className="w-full text-slate-500 py-2">Cancelar</button>
                 </form>
             </div>
