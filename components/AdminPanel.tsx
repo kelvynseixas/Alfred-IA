@@ -15,6 +15,15 @@ interface AdminPanelProps {
   onAddAnnouncement: (ann: Announcement) => void;
 }
 
+const getPlanName = (id: string) => {
+    switch (id) {
+        case 'MONTHLY': return 'Mensal';
+        case 'SEMIANNUAL': return 'Semestral';
+        case 'ANNUAL': return 'Anual';
+        default: return id;
+    }
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, tutorials, isDarkMode, onUpdateUser, onAddUser, onManagePlan, onManageTutorial, onAddAnnouncement }) => {
   const [activeTab, setActiveTab] = useState('DASHBOARD');
   
@@ -117,8 +126,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
       onUpdateUser();
   };
 
-  const handleUpdatePlan = async (id: string, price: number, trialDays: number) => {
-      await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify({ id, price, trialDays }) });
+  const handleUpdatePlan = async (id: string, name: string, price: number, trialDays: number) => {
+      await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify({ id, name, price, trialDays }) });
       onManagePlan();
   };
 
@@ -160,8 +169,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
   // Dashboard calculations
   const planStats = plans.map(plan => {
      const count = users.filter(u => !u.isTestUser && (u.subscription === plan.id || u.planId === plan.id)).length;
-     const revenue = count * plan.price;
-     return { name: plan.name, count, revenue };
+     const revenue = count * (plan.price || 0);
+     return { id: plan.id, name: plan.name || getPlanName(plan.id), count, revenue };
   });
 
   return (
@@ -199,7 +208,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                       <p className="text-3xl text-white font-serif">{users.filter(u => !u.isTestUser).length}</p>
                   </div>
                   {planStats.map(stat => (
-                      <div key={stat.name} className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+                      <div key={stat.id} className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
                           <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">{stat.name}</h3>
                           <div className="flex justify-between items-end">
                              <p className="text-2xl text-emerald-400 font-serif">{stat.count} <span className="text-xs text-slate-500 font-sans">clientes</span></p>
@@ -292,12 +301,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {['MONTHLY', 'SEMIANNUAL', 'ANNUAL'].map(type => {
                   const plan = plans.find(p => p.id === type) || { id: type, price: 0, trialDays: 0 };
+                  const planName = getPlanName(type);
                   return (
                     <div key={type} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                        <h3 className="text-lg font-medium text-white mb-4">{type === 'MONTHLY' ? 'Mensal' : type === 'SEMIANNUAL' ? 'Semestral' : 'Anual'}</h3>
+                        <h3 className="text-lg font-medium text-white mb-4">{planName}</h3>
                         <div className="space-y-4">
-                            <div><label className="text-xs text-slate-400">Preço (R$)</label><input type="number" step="0.01" defaultValue={plan.price} onBlur={(e) => handleUpdatePlan(plan.id, Number(e.target.value), plan.trialDays)} className={inputClass} /></div>
-                            <div><label className="text-xs text-slate-400">Dias Grátis</label><input type="number" defaultValue={plan.trialDays} onBlur={(e) => handleUpdatePlan(plan.id, plan.price, Number(e.target.value))} className={inputClass} /></div>
+                            <div><label className="text-xs text-slate-400">Preço (R$)</label><input type="number" step="0.01" defaultValue={plan.price} onBlur={(e) => handleUpdatePlan(plan.id, planName, Number(e.target.value), plan.trialDays)} className={inputClass} /></div>
+                            <div><label className="text-xs text-slate-400">Dias Grátis</label><input type="number" defaultValue={plan.trialDays} onBlur={(e) => handleUpdatePlan(plan.id, planName, plan.price, Number(e.target.value))} className={inputClass} /></div>
                         </div>
                     </div>
                   );
@@ -321,7 +331,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                            {['MONTHLY', 'SEMIANNUAL', 'ANNUAL'].map(type => (
                                <label key={type} className="flex items-center gap-2 cursor-pointer">
                                    <input type="checkbox" checked={newCoupon.appliesTo.includes(type as any)} onChange={() => toggleCouponPlan(type as any)} className="rounded border-slate-600 bg-slate-800 text-gold-500 focus:ring-gold-500" />
-                                   <span className="text-slate-300 text-sm">{type === 'MONTHLY' ? 'Mensal' : type === 'SEMIANNUAL' ? 'Semestral' : 'Anual'}</span>
+                                   <span className="text-slate-300 text-sm">{getPlanName(type)}</span>
                                </label>
                            ))}
                        </div>

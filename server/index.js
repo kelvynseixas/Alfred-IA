@@ -353,9 +353,9 @@ app.patch('/api/admin/users/:id', authenticateToken, async (req, res) => {
 
 app.post('/api/admin/plans', authenticateToken, async (req, res) => {
     if (req.user.role !== 'ADMIN') return res.sendStatus(403);
-    const { id, price, trialDays } = req.body;
+    const { id, name, price, trialDays } = req.body;
     try {
-        await pool.query('INSERT INTO plans (id, price, trial_days) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET price = $2, trial_days = $3', [id, price, trialDays]);
+        await pool.query('INSERT INTO plans (id, name, price, trial_days) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET name = $2, price = $3, trial_days = $4', [id, name, price, trialDays]);
         res.json({success: true});
     } catch (e) { res.sendStatus(500); }
 });
