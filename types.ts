@@ -30,6 +30,14 @@ export interface Plan {
   active: boolean;
 }
 
+export interface Account {
+  id: string;
+  name: string;
+  type: 'CHECKING' | 'SAVINGS' | 'INVESTMENT' | 'WALLET';
+  balance: number; // Saldo calculado ou inicial
+  color?: string;
+}
+
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
@@ -40,6 +48,7 @@ export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY
 
 export interface Transaction {
   id: string;
+  accountId?: string; // Vinculo com conta
   description: string;
   amount: number;
   type: TransactionType;
