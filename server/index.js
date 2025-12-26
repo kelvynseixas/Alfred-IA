@@ -10,7 +10,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Aumentado limite para upload de áudio/imagem
+// Aumentado limite para suportar áudios em base64 no payload do chat
+app.use(express.json({ limit: '50mb' })); 
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const pool = new Pool({
@@ -57,6 +58,19 @@ const runMigrations = async () => {
         await client.query(`CREATE TABLE IF NOT EXISTS coupons (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), value DECIMAL(10,2), applies_to JSONB, active BOOLEAN DEFAULT TRUE)`);
         await client.query(`CREATE TABLE IF NOT EXISTS tutorials (id SERIAL PRIMARY KEY, title VARCHAR(255), description TEXT, video_url VARCHAR(255))`);
         await client.query(`CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title VARCHAR(255), message TEXT, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, active BOOLEAN DEFAULT TRUE)`);
+        
+        // Nova Tabela: Chat History
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                sender VARCHAR(10),
+                text TEXT,
+                image_url TEXT,
+                audio_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
         // 3. Garantir Colunas
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription VARCHAR(50) DEFAULT 'MONTHLY'`);
@@ -135,7 +149,6 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
-        // Correção de Projetos: Aliases para camelCase
         const projectsQuery = `
             SELECT id, title, description, 
                    target_amount as "targetAmount", 
@@ -205,12 +218,38 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     }
 });
 
+// --- CHAT ---
+app.get('/api/chat', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, sender, text, image_url as "imageUrl", audio_url as "audioUrl", created_at as "timestamp"
+            FROM chat_messages 
+            WHERE user_id = $1 
+            ORDER BY created_at ASC 
+            LIMIT 50
+        `, [req.user.id]);
+        res.json(result.rows);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/chat', authenticateToken, async (req, res) => {
+    const { sender, text, imageUrl, audioUrl } = req.body;
+    try {
+        const result = await pool.query(
+            'INSERT INTO chat_messages (user_id, sender, text, image_url, audio_url) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            [req.user.id, sender, text, imageUrl, audioUrl]
+        );
+        res.json({ success: true, id: result.rows[0].id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- TRANSACTIONS ---
 app.post('/api/transactions', authenticateToken, async (req, res) => {
-    // ... (mesmo código de antes, apenas garantindo o uso do generateRecurrentDates se necessário)
     const { description, amount, type, category, date, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
-    // ...
-    // Para simplificar a resposta aqui no XML, mantendo a lógica original mas garantindo import
     const generateRecurrentDates = (startDateStr, period, interval, limit) => {
         const dates = [];
         let current = new Date(startDateStr);
@@ -250,12 +289,10 @@ app.patch('/api/transactions/:id', authenticateToken, async (req, res) => {
     let idx = 1;
     
     for(const [key, value] of Object.entries(updates)) {
-        // Converter camelCase para snake_case se necessário
         let dbKey = key;
         if(key === 'recurrencePeriod') dbKey = 'recurrence_period';
         if(key === 'recurrenceInterval') dbKey = 'recurrence_interval';
         if(key === 'recurrenceLimit') dbKey = 'recurrence_limit';
-        
         fields.push(`${dbKey} = $${idx++}`);
         values.push(value);
     }
@@ -272,7 +309,7 @@ app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
     try { await pool.query('DELETE FROM transactions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]); res.json({success:true}); } catch (e) { res.sendStatus(500); }
 });
 
-// --- PROJECTS (CORRIGIDO) ---
+// --- PROJECTS ---
 app.post('/api/projects', authenticateToken, async (req, res) => {
     const { title, description, targetAmount, deadline, category } = req.body;
     try {
@@ -285,9 +322,7 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
 });
 
 app.patch('/api/projects/:id', authenticateToken, async (req, res) => {
-    // Agora aceita TODOS os campos e mapeia camelCase -> snake_case
     const { title, description, targetAmount, currentAmount, deadline, category, status } = req.body;
-    
     const updates = [];
     const values = [];
     let idx = 1;
@@ -320,7 +355,6 @@ app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
 
 // --- TASKS ---
 app.post('/api/tasks', authenticateToken, async (req, res) => {
-     // (Reutilizando generateRecurrentDates definido acima)
      const generateRecurrentDates = (startDateStr, period, interval, limit) => {
         const dates = [];
         let current = new Date(startDateStr);
@@ -373,7 +407,6 @@ app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
 
     for(const [key, value] of Object.entries(updates)) {
         let dbKey = key;
-        // Map common discrepancies
         if(key === 'recurrencePeriod') dbKey = 'recurrence_period';
         fields.push(`${dbKey} = $${idx++}`);
         values.push(value);
@@ -412,7 +445,6 @@ app.post('/api/admin/config', authenticateToken, async (req, res) => {
     if (req.user.role !== 'ADMIN') return res.sendStatus(403);
     try { await pool.query('INSERT INTO system_configs (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', ['general_config', req.body]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
-// (Restante dos endpoints Admin mantidos, apenas certifique-se de usar queries parametrizadas)
 app.post('/api/admin/users', authenticateToken, async (req, res) => {
     if (req.user.role !== 'ADMIN') return res.sendStatus(403);
     const { name, email, password, subscription, isTestUser } = req.body;

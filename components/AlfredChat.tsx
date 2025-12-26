@@ -40,6 +40,56 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Carregar histórico
+  useEffect(() => {
+    if (isOpen) {
+        fetchChatHistory();
+    }
+  }, [isOpen]);
+
+  const fetchChatHistory = async () => {
+      try {
+          const res = await fetch('/api/chat', {
+             headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }
+          });
+          if (res.ok) {
+              const history = await res.json();
+              if (history && history.length > 0) {
+                  // Mapeia histórico do banco para o estado
+                  const mappedHistory = history.map((msg: any) => ({
+                      id: msg.id.toString(),
+                      sender: msg.sender,
+                      text: msg.text,
+                      imageUrl: msg.imageUrl || undefined,
+                      audioUrl: msg.audioUrl || undefined,
+                      timestamp: new Date(msg.timestamp)
+                  }));
+                  setMessages(mappedHistory);
+              }
+          }
+      } catch (e) {
+          console.error("Falha ao carregar histórico", e);
+      }
+  };
+
+  const saveMessageToDb = async (msg: Partial<Message>) => {
+      try {
+          await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` 
+              },
+              body: JSON.stringify({
+                  sender: msg.sender,
+                  text: msg.text,
+                  imageUrl: msg.imageUrl,
+                  audioUrl: msg.audioUrl
+              })
+          });
+      } catch (e) { console.error(e); }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -69,11 +119,13 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       sender: 'user',
       text: input,
       imageUrl: selectedImage || undefined,
-      audioUrl: audioPreviewUrl || undefined,
+      audioUrl: audioPreviewUrl || undefined, // Nota: audioUrl (blob) não persiste bem no DB simples, ideal seria upload S3
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMsg]);
+    saveMessageToDb({ ...userMsg, audioUrl: audioBase64 }); // Salva base64 no banco (limitado, mas funcional para demo)
+
     setInput('');
     const imageToSend = selectedImage;
     setSelectedImage(null); 
@@ -95,18 +147,20 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       };
 
       setMessages(prev => [...prev, alfredMsg]);
+      saveMessageToDb(alfredMsg);
 
       if (response.action && response.action.type !== 'NONE') {
         onAIAction(response.action);
       }
 
     } catch (error) {
-      setMessages(prev => [...prev, {
+      const errorMsg: Message = {
         id: Date.now().toString(),
         sender: 'alfred',
         text: "Peço perdão, estou com dificuldades de conexão no momento.",
         timestamp: new Date()
-      }]);
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setLoading(false);
     }
@@ -127,7 +181,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   const startRecording = async () => {
       try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const mediaRecorder = new MediaRecorder(stream);
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
 

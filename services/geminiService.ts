@@ -64,7 +64,8 @@ export const sendMessageToAlfred = async (
     }
 
     const ai = new GoogleGenAI({ apiKey: key });
-    const model = 'gemini-2.5-flash-latest'; // Modelo com melhor suporte multimodal (Áudio/Imagem)
+    // Usando gemini-2.0-flash-exp para suporte multimodal via HTTP requests
+    const model = 'gemini-2.0-flash-exp'; 
     
     // Contexto simplificado
     const tasksSimple = contextData.tasks.map((t:any) => ({ id: t.id, title: t.title, date: t.date })).slice(0, 5);
@@ -96,11 +97,9 @@ export const sendMessageToAlfred = async (
 
     if (audioBase64) {
         // Remove header do base64 se existir
-        const cleanAudio = audioBase64.split(',')[1] || audioBase64;
+        const cleanAudio = audioBase64.includes('base64,') ? audioBase64.split('base64,')[1] : audioBase64;
         contents.push({
             inlineData: {
-                // Gemini aceita mp3, wav, aac, etc. O MediaRecorder geralmente gera webm ou mp4.
-                // 'audio/webm' é seguro para chrome/firefox recorders.
                 mimeType: "audio/webm", 
                 data: cleanAudio
             }
@@ -127,8 +126,9 @@ export const sendMessageToAlfred = async (
   } catch (error) {
     console.error("Erro AI:", error);
     console.error("Texto bruto da IA que causou o erro:", rawTextFromAI); 
+    // Se o erro for de API, retorna o erro técnico no console e mensagem amigável
     return {
-      reply: "Peço perdão, Senhor. Tive uma falha em meus circuitos de dedução. Poderia repetir de forma mais clara?",
+      reply: "Peço perdão, Senhor. Tive uma falha em meus circuitos de dedução. Verifique se o áudio está claro e se sua chave de API possui acesso ao modelo gemini-2.0-flash-exp.",
       action: { type: 'NONE', payload: null }
     };
   }
