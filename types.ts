@@ -1,6 +1,9 @@
+
+
 export enum ModuleType {
   FINANCE = 'FINANCE',
   PROJECTS = 'PROJECTS',
+  INVESTMENTS = 'INVESTMENTS',
   TASKS = 'TASKS',
   LISTS = 'LISTS',
   ADMIN = 'ADMIN',
@@ -21,42 +24,46 @@ export enum SubscriptionType {
   ANNUAL = 'ANNUAL'
 }
 
-export interface Plan {
-  id: string;
-  name: string;
-  type: SubscriptionType;
-  price: number;
-  trialDays: number;
-  active: boolean;
+export enum TransactionType {
+  INCOME = 'INCOME',
+  EXPENSE = 'EXPENSE',
+  RESERVE = 'RESERVE' 
 }
+
+export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
 export interface Account {
   id: string;
   name: string;
   type: 'CHECKING' | 'SAVINGS' | 'INVESTMENT' | 'WALLET';
-  balance: number; // Saldo calculado ou inicial
+  balance: number;
   color?: string;
 }
 
-export enum TransactionType {
-  INCOME = 'INCOME',
-  EXPENSE = 'EXPENSE',
-  INVESTMENT = 'INVESTMENT'
-}
-
-export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
-
 export interface Transaction {
   id: string;
-  accountId?: string; // Vinculo com conta
+  accountId?: string;
+  projectId?: string; 
   description: string;
   amount: number;
   type: TransactionType;
   category: string;
   date: string;
-  recurrencePeriod?: RecurrencePeriod;
-  recurrenceInterval?: number; // ex: a cada 2 meses
-  recurrenceLimit?: number; // finalizar após X ocorrências
+  recurrencePeriod: RecurrencePeriod;
+}
+
+export interface Investment {
+  id: string;
+  name: string;
+  type: 'CDB' | 'TESOURO' | 'LCI_LCA' | 'ACOES' | 'FII' | 'CRYPTO';
+  institution: string;
+  initialAmount: number;
+  currentAmount: number;
+  interestRate: string; 
+  startDate: string;
+  dueDate?: string;
+  liquidity: 'DAILY' | 'AT_MATURITY' | 'LOCKED';
+  notes?: string;
 }
 
 export interface FinancialProject {
@@ -84,10 +91,7 @@ export interface Task {
   time?: string;
   status: TaskStatus;
   priority: 'low' | 'medium' | 'high';
-  notified?: boolean;
-  recurrencePeriod?: RecurrencePeriod;
-  recurrenceInterval?: number;
-  recurrenceLimit?: number;
+  recurrencePeriod: RecurrencePeriod;
 }
 
 export enum ItemStatus {
@@ -109,123 +113,77 @@ export interface ListGroup {
   items: ListItem[];
 }
 
+// Added missing PaymentHistory interface to fix import error in UserProfile.tsx
 export interface PaymentHistory {
   id: string;
   date: string;
   amount: number;
-  method: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
-  status: 'PAID' | 'PENDING' | 'FAILED';
-  invoiceUrl?: string;
+  method: string;
+  status: string;
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
+  avatarUrl?: string;
   role: UserRole;
   subscription?: SubscriptionType;
   planId?: string;
-  trialEndsAt?: string;
   active: boolean;
   isTestUser?: boolean;
-  modules: ModuleType[];
-  since: string;
-  aiUsageTokenCount?: number;
-  avatarUrl?: string;
+  trialEndsAt?: string;
+  // Use defined PaymentHistory interface instead of any[]
   paymentHistory?: PaymentHistory[];
-  readAnnouncements?: string[]; 
-  dismissedAnnouncements?: string[]; 
+  modules: ModuleType[];
 }
 
-export interface Notification {
+export interface Plan {
   id: string;
-  title: string;
-  message: string;
-  type: 'FINANCE' | 'TASK' | 'SYSTEM';
-  read: boolean;
-  date: string;
-}
-
-export interface Announcement {
-  id: string;
-  title: string;
-  message: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  isPopup: boolean;
-  date: string;
+  name: string;
+  type: SubscriptionType;
+  price: number;
+  trialDays: number;
+  active: boolean;
 }
 
 export interface Tutorial {
   id: string;
   title: string;
   description: string;
-  videoUrl: string; 
+  videoUrl: string;
 }
 
-export type DateRangeOption = '7D' | '15D' | '30D' | '60D' | 'CUSTOM';
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  date: string;
+}
+
+export interface SystemConfig {
+  timezone: string;
+  aiProvider: string;
+  aiKeys: { gemini: string };
+  webhookUrl: string;
+  evolutionApi: any;
+  paymentGateway: any;
+  branding: any;
+}
 
 export interface Coupon {
   id: string;
   code: string;
-  type: 'PERCENTAGE' | 'FIXED';
   value: number;
-  appliesTo: SubscriptionType[]; 
-  active: boolean;
+  type: 'PERCENTAGE' | 'FIXED';
+  appliesTo: SubscriptionType[];
 }
-
-export interface SystemConfig {
-  timezone: string; 
-  aiProvider: 'GEMINI' | 'OPENAI' | 'ANTHROPIC';
-  aiKeys: {
-    gemini?: string;
-    openai?: string;
-    anthropic?: string;
-  };
-  webhookUrl: string;
-  evolutionApi: {
-    enabled: boolean;
-    baseUrl: string;
-    globalApiKey: string;
-    instanceName: string;
-    instanceToken?: string;
-  };
-  paymentGateway: {
-    provider: 'PAGSEGURO';
-    email: string;
-    token: string;
-    sandbox: boolean;
-    rates: {
-      creditCard: number; 
-      creditCardInstallment: number; 
-      pix: number; 
-      boleto: number; 
-    }
-  };
-  branding: {
-    logoUrl?: string;
-    chatAvatarUrl?: string;
-    primaryColor: string;
-    secondaryColor: string;
-  };
-}
-
-export type AIActionType = 
-  | 'ADD_TRANSACTION' 
-  | 'ADD_TASK' 
-  | 'UPDATE_TASK' 
-  | 'ADD_LIST_ITEM' 
-  | 'CREATE_LIST_WITH_ITEMS' 
-  | 'COMPLETE_LIST_ITEM'
-  | 'ADD_PROJECT'
-  | 'UPDATE_PROJECT'
-  | 'NONE';
 
 export interface AIResponse {
   reply: string;
   action?: {
-    type: AIActionType;
+    type: string;
     payload: any;
   };
 }
