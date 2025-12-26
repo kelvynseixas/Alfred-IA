@@ -23,43 +23,93 @@ const pool = new Pool({
 
 const SECRET_KEY = process.env.JWT_SECRET || 'alfred_super_secret_key';
 
-const initDB = async () => {
+// --- AUTO-MIGRATION SYSTEM ---
+const runMigrations = async () => {
+    const client = await pool.connect();
     try {
-        await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto"');
-        
-        // Tabelas Base
-        await pool.query(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name VARCHAR(255), email VARCHAR(255) UNIQUE, password_hash VARCHAR(255), phone VARCHAR(50), role VARCHAR(20) DEFAULT 'USER', subscription VARCHAR(50) DEFAULT 'MONTHLY', trial_ends_at TIMESTAMP, active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, is_test_user BOOLEAN DEFAULT FALSE)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS system_configs (key VARCHAR(50) PRIMARY KEY, value JSONB)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS list_groups (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), name VARCHAR(255))`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS list_items (id SERIAL PRIMARY KEY, list_id INTEGER REFERENCES list_groups(id) ON DELETE CASCADE, name VARCHAR(255), status VARCHAR(50) DEFAULT 'PENDING', category VARCHAR(100))`);
-        
-        // Tabelas Principais (Atualizadas para nova recorrência)
-        await pool.query(`CREATE TABLE IF NOT EXISTS tasks (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(255), date DATE, time TIME, status VARCHAR(50), priority VARCHAR(20), notified BOOLEAN DEFAULT FALSE, recurrence_period VARCHAR(20) DEFAULT 'NONE', recurrence_interval INTEGER DEFAULT 1)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS transactions (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), description VARCHAR(255), amount DECIMAL(10, 2), type VARCHAR(20), category VARCHAR(100), date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, recurrence_period VARCHAR(20) DEFAULT 'NONE', recurrence_interval INTEGER DEFAULT 1)`);
+        console.log('[Auto-Migration] Iniciando verificação de integridade do Banco de Dados...');
+        await client.query('BEGIN');
 
-        // Novo Módulo: Projetos
-        await pool.query(`CREATE TABLE IF NOT EXISTS financial_projects (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(255), description TEXT, target_amount DECIMAL(10,2), current_amount DECIMAL(10,2) DEFAULT 0, deadline DATE, category VARCHAR(20), status VARCHAR(20) DEFAULT 'ACTIVE')`);
+        // 1. Garantir Extensões
+        await client.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto"');
 
-        // Admin Tables
-        await pool.query(`CREATE TABLE IF NOT EXISTS plans (id VARCHAR(50) PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), trial_days INTEGER, active BOOLEAN DEFAULT TRUE)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS coupons (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), value DECIMAL(10,2), applies_to JSONB, active BOOLEAN DEFAULT TRUE)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS tutorials (id SERIAL PRIMARY KEY, title VARCHAR(255), description TEXT, video_url VARCHAR(255))`);
+        // 2. Garantir Tabelas Base (CREATE TABLE IF NOT EXISTS)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY, 
+                name VARCHAR(255), 
+                email VARCHAR(255) UNIQUE, 
+                password_hash VARCHAR(255), 
+                phone VARCHAR(50), 
+                role VARCHAR(20) DEFAULT 'USER', 
+                active BOOLEAN DEFAULT TRUE, 
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`CREATE TABLE IF NOT EXISTS system_configs (key VARCHAR(50) PRIMARY KEY, value JSONB)`);
         
-        // Informativos
-        await pool.query(`CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title VARCHAR(255), message TEXT, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, active BOOLEAN DEFAULT TRUE)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS list_groups (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), name VARCHAR(255))`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS list_items (id SERIAL PRIMARY KEY, list_id INTEGER REFERENCES list_groups(id) ON DELETE CASCADE, name VARCHAR(255), status VARCHAR(50) DEFAULT 'PENDING', category VARCHAR(100))`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS tasks (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(255), date DATE, time TIME, status VARCHAR(50), priority VARCHAR(20), notified BOOLEAN DEFAULT FALSE)`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS transactions (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), description VARCHAR(255), amount DECIMAL(10, 2), type VARCHAR(20), category VARCHAR(100), date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        // Seed Admin
+        await client.query(`CREATE TABLE IF NOT EXISTS financial_projects (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(255), description TEXT, target_amount DECIMAL(10,2), current_amount DECIMAL(10,2) DEFAULT 0, deadline DATE, category VARCHAR(20), status VARCHAR(20) DEFAULT 'ACTIVE')`);
+
+        await client.query(`CREATE TABLE IF NOT EXISTS plans (id VARCHAR(50) PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), trial_days INTEGER, active BOOLEAN DEFAULT TRUE)`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS coupons (id SERIAL PRIMARY KEY, code VARCHAR(50) UNIQUE, type VARCHAR(20), value DECIMAL(10,2), applies_to JSONB, active BOOLEAN DEFAULT TRUE)`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS tutorials (id SERIAL PRIMARY KEY, title VARCHAR(255), description TEXT, video_url VARCHAR(255))`);
+        
+        await client.query(`CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title VARCHAR(255), message TEXT, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, active BOOLEAN DEFAULT TRUE)`);
+
+        // 3. Garantir Colunas (ALTER TABLE ... ADD COLUMN IF NOT EXISTS)
+        // Isso permite que o sistema evolua sem perder dados de tabelas antigas
+        
+        // Users
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription VARCHAR(50) DEFAULT 'MONTHLY'`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_test_user BOOLEAN DEFAULT FALSE`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_id VARCHAR(50)`);
+
+        // Transactions (Recorrência)
+        await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurrence_period VARCHAR(20) DEFAULT 'NONE'`);
+        await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER DEFAULT 1`);
+        await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurrence_limit INTEGER DEFAULT 0`);
+
+        // Tasks (Recorrência)
+        await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_period VARCHAR(20) DEFAULT 'NONE'`);
+        await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER DEFAULT 1`);
+        await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_limit INTEGER DEFAULT 0`);
+
+        // System Configs (Caso tenha sido criada como TEXT no passado, garantimos compatibilidade ou migração futura, mas aqui focamos na estrutura)
+        // Se a tabela já existe com 'value TEXT', o Postgres permite JSONB normalmente se for conversível, mas aqui assumimos a estrutura correta.
+
+        // Seed Admin se não existir
         const adminEmail = 'maisalem.md@gmail.com';
-        const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
+        const userCheck = await client.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
         if (userCheck.rows.length === 0) {
+            console.log('[Auto-Migration] Criando usuário Admin padrão...');
             const hash = await bcrypt.hash('Alfred@1992', 10);
-            await pool.query("INSERT INTO users (name, email, password_hash, role, subscription) VALUES ($1, $2, $3, 'ADMIN', 'ANNUAL')", ['Alfred Admin', adminEmail, hash]);
+            await client.query("INSERT INTO users (name, email, password_hash, role, subscription) VALUES ($1, $2, $3, 'ADMIN', 'ANNUAL')", ['Alfred Admin', adminEmail, hash]);
         }
+
+        await client.query('COMMIT');
+        console.log('[Auto-Migration] Banco de dados pronto e atualizado.');
     } catch (e) {
-        console.error('DB Init Error:', e);
+        await client.query('ROLLBACK');
+        console.error('[Auto-Migration Error] Falha crítica na migração:', e);
+    } finally {
+        client.release();
     }
 };
-initDB();
+
+// Executar Migrations na inicialização
+runMigrations();
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -168,8 +218,8 @@ app.post('/api/transactions', authenticateToken, async (req, res) => {
             await client.query('BEGIN');
             for (const d of datesToInsert) {
                 await client.query(
-                    'INSERT INTO transactions (user_id, description, amount, type, category, date, recurrence_period, recurrence_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-                    [req.user.id, description, amount, type, category, d.toISOString(), recurrencePeriod, recurrenceInterval]
+                    'INSERT INTO transactions (user_id, description, amount, type, category, date, recurrence_period, recurrence_interval, recurrence_limit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+                    [req.user.id, description, amount, type, category, d.toISOString(), recurrencePeriod, recurrenceInterval, recurrenceLimit || 0]
                 );
             }
             await client.query('COMMIT');
@@ -242,8 +292,8 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
                 // Formatar data YYYY-MM-DD para o campo DATE do Postgres
                 const dateStr = d.toISOString().split('T')[0];
                 await client.query(
-                    'INSERT INTO tasks (user_id, title, date, time, priority, status, recurrence_period, recurrence_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-                    [req.user.id, title, dateStr, time || null, priority, 'PENDING', recurrencePeriod, recurrenceInterval]
+                    'INSERT INTO tasks (user_id, title, date, time, priority, status, recurrence_period, recurrence_interval, recurrence_limit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+                    [req.user.id, title, dateStr, time || null, priority, 'PENDING', recurrencePeriod, recurrenceInterval, recurrenceLimit || 0]
                 );
             }
             await client.query('COMMIT');
