@@ -21,6 +21,7 @@ import { LoginPage } from './components/LoginPage';
 import { TutorialModule } from './components/TutorialModule';
 import { LayoutDashboard, CheckSquare, List, Settings, LogOut, Bot, User as UserIcon, BookOpen, Bell, Clock, Target, Info, Trash2, CheckCircle, Menu, X } from 'lucide-react';
 
+// Avatar Vetorial Premium do Alfred
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%230f172a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%231e293b;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='100' cy='100' r='90' fill='url(%23grad1)' stroke='%23d97706' stroke-width='4'/%3E%3Cpath d='M65 80 Q 80 95 95 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M105 80 Q 120 95 135 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Crect x='50' y='60' width='100' height='20' rx='5' fill='%2338bdf8' opacity='0.2'/%3E%3Cpath d='M100 130 Q 130 130 140 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 130 Q 70 130 60 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 150 L 100 170' stroke='%23d97706' stroke-width='6'/%3E%3Cpath d='M70 170 L 130 170 L 115 190 L 85 190 Z' fill='%23d97706'/%3E%3Cpath d='M90 170 L 90 180 L 110 180 L 110 170' fill='%230f172a'/%3E%3Ccircle cx='100' cy='100' r='95' stroke='%23d97706' stroke-width='2' fill='none' opacity='0.5'/%3E%3C/svg%3E";
 
 const App = () => {
@@ -145,29 +146,104 @@ const App = () => {
 
   const handleLogout = () => { localStorage.removeItem('alfred_token'); localStorage.removeItem('alfred_user_data'); setIsAuthenticated(false); setCurrentUser(null); };
 
+  // Helper para limpar números vindos da IA (ex: "20.000", "R$ 50")
+  const sanitizeNumber = (val: any): number => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+          // Remove tudo que não é dígito ou ponto
+          const clean = val.replace(/[^\d.]/g, '');
+          return parseFloat(clean) || 0;
+      }
+      return 0;
+  };
+
   const handleAIAction = async (action: { type: AIActionType, payload: any }) => {
-      // Normalizar payload caso a IA retorne campos com casing diferente
-      if (action.type === 'ADD_TRANSACTION') {
-          const payload = {
-              ...action.payload,
-              // Garantir que amount seja número
-              amount: typeof action.payload.amount === 'string' ? parseFloat(action.payload.amount) : action.payload.amount
-          };
-          await fetch('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(payload) });
-          fetchDashboardData();
-      } else if (action.type === 'ADD_TASK') {
-          await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify({...action.payload, status: TaskStatus.PENDING}) });
-          fetchDashboardData();
-      } else if (action.type === 'UPDATE_TASK' && action.payload.id) {
-          await handleEditTask(action.payload.id, action.payload.updates);
-      } else if (action.type === 'ADD_PROJECT') {
-          await fetch('/api/projects', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, 
-            body: JSON.stringify(action.payload) 
-          });
-          setActiveModule(ModuleType.PROJECTS);
-          fetchDashboardData();
+      try {
+        const token = localStorage.getItem('alfred_token');
+        if (!token) return;
+
+        // --- TRANSAÇÕES ---
+        if (action.type === 'ADD_TRANSACTION') {
+            const raw = action.payload || {};
+            const payload = {
+                description: raw.description || 'Despesa não identificada',
+                amount: sanitizeNumber(raw.amount),
+                type: raw.type || 'EXPENSE',
+                category: raw.category || 'Geral',
+                date: raw.date || new Date().toISOString(),
+                recurrencePeriod: raw.recurrencePeriod || 'NONE',
+                recurrenceInterval: raw.recurrenceInterval ? parseInt(raw.recurrenceInterval) : 1,
+                recurrenceLimit: raw.recurrenceLimit ? parseInt(raw.recurrenceLimit) : 0
+            };
+            
+            await fetch('/api/transactions', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
+                body: JSON.stringify(payload) 
+            });
+            fetchDashboardData();
+        } 
+        
+        // --- TAREFAS ---
+        else if (action.type === 'ADD_TASK') {
+            const raw = action.payload || {};
+            const payload = {
+                title: raw.title || 'Nova Tarefa',
+                date: raw.date || new Date().toISOString().split('T')[0],
+                time: raw.time || null,
+                priority: raw.priority || 'medium',
+                status: TaskStatus.PENDING,
+                recurrencePeriod: raw.recurrencePeriod || 'NONE'
+            };
+
+            await fetch('/api/tasks', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
+                body: JSON.stringify(payload) 
+            });
+            fetchDashboardData();
+        } 
+        
+        // --- ATUALIZAR TAREFAS ---
+        else if (action.type === 'UPDATE_TASK' && action.payload.id) {
+            await handleEditTask(action.payload.id, action.payload.updates);
+        } 
+        
+        // --- PROJETOS & METAS ---
+        else if (action.type === 'ADD_PROJECT') {
+            const raw = action.payload || {};
+            const payload = {
+                title: raw.title || 'Novo Projeto',
+                description: raw.description || '',
+                targetAmount: sanitizeNumber(raw.targetAmount),
+                deadline: raw.deadline || null,
+                category: raw.category || 'GOAL'
+            };
+
+            await fetch('/api/projects', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
+                body: JSON.stringify(payload) 
+            });
+            setActiveModule(ModuleType.PROJECTS);
+            fetchDashboardData();
+        }
+
+        // --- LISTAS ---
+        else if (action.type === 'ADD_LIST_ITEM') {
+            const raw = action.payload || {};
+            if (raw.listId && raw.name) {
+                 await fetch(`/api/lists/${raw.listId}/items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ name: raw.name })
+                });
+                fetchDashboardData();
+            }
+        }
+
+      } catch (error) {
+          console.error("Falha ao executar ação da IA:", error);
       }
   };
 
@@ -190,7 +266,9 @@ const App = () => {
     <>
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <Bot className="text-gold-500 w-8 h-8" />
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-gold-500">
+                <img src={ALFRED_ICON_URL} alt="Alfred" className="w-full h-full object-cover" />
+            </div>
             <h1 className="text-2xl font-serif font-bold tracking-tight text-white">Alfred IA</h1>
           </div>
           <div className="mb-6 px-3 py-2 bg-slate-800/50 rounded-lg flex items-center gap-2 text-slate-300 text-sm">
@@ -242,7 +320,9 @@ const App = () => {
              <div className="flex items-center gap-4">
                 <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden text-white"><Menu size={24} /></button>
                 <div className="md:hidden flex items-center gap-2">
-                     <Bot className="text-gold-500 w-6 h-6" />
+                     <div className="w-8 h-8 rounded-full overflow-hidden border border-gold-500">
+                        <img src={ALFRED_ICON_URL} alt="Alfred" className="w-full h-full object-cover" />
+                     </div>
                      <span className="font-serif font-bold text-white">Alfred</span>
                 </div>
              </div>
@@ -350,7 +430,9 @@ const App = () => {
         </div>
         
         <button onClick={() => setIsChatOpen(true)} className="fixed bottom-8 right-8 w-14 h-14 bg-gold-600 hover:bg-gold-500 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-transform z-50">
-          <Bot className="text-slate-900 w-8 h-8" />
+          <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center overflow-hidden">
+             <img src={ALFRED_ICON_URL} className="w-full h-full object-cover" />
+          </div>
         </button>
         <AlfredChat appContext={{ tasks, transactions }} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onAIAction={handleAIAction} />
       </main>
