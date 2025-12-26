@@ -154,7 +154,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
                 <h3 className={`text-xl font-medium ${textPrimary}`}>{user.name}</h3>
                 <p className="text-slate-400 text-sm mb-4 uppercase font-bold tracking-widest">{user.role}</p>
                 
-                {daysRemaining <= 5 && (
+                {!user.isTestUser && daysRemaining <= 5 && (
                     <button 
                         onClick={() => setIsPaymentModalOpen(true)}
                         className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded font-bold text-sm flex items-center justify-center gap-2 mb-2 animate-pulse shadow-lg transition-transform active:scale-95"
@@ -166,30 +166,37 @@ export const UserProfile: React.FC<UserProfileProps> = ({ user, plans, isDarkMod
 
             <div className={`rounded-xl border p-6 ${cardClass}`}>
                 <h4 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Assinatura</h4>
-                <div className="space-y-4">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Plano</span>
-                        <span className="text-white font-bold">{currentPlan ? currentPlan.name : user.subscription}</span>
+                {user.isTestUser ? (
+                     <div className="text-center p-4 bg-slate-900/50 rounded-lg border border-blue-500/30">
+                        <p className="font-bold text-blue-400 text-lg">Conta de Teste</p>
+                        <p className="text-slate-500 text-xs mt-1">Acesso ilimitado para fins de teste e desenvolvimento.</p>
                     </div>
-                    <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Ciclo</span>
-                        <span className="text-gold-400 font-bold">{user.subscription}</span>
-                    </div>
-                    
-                    <div className={`p-3 rounded border text-center ${daysRemaining <= 5 ? 'bg-red-500/10 border-red-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
-                         <p className={`text-xs uppercase font-bold mb-1 ${daysRemaining <= 5 ? 'text-red-400' : 'text-slate-500'}`}>Vencimento</p>
-                         <p className={`text-lg font-bold ${daysRemaining <= 5 ? 'text-red-500' : 'text-emerald-400'}`}>
-                             {daysRemaining > 0 ? `Falta ${daysRemaining} dias` : 'Vencido'}
-                         </p>
-                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Plano</span>
+                            <span className="text-white font-bold">{currentPlan ? currentPlan.name : user.subscription}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Ciclo</span>
+                            <span className="text-gold-400 font-bold">{user.subscription}</span>
+                        </div>
+                        
+                        <div className={`p-3 rounded border text-center ${daysRemaining <= 5 ? 'bg-red-500/10 border-red-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
+                            <p className={`text-xs uppercase font-bold mb-1 ${daysRemaining <= 5 ? 'text-red-400' : 'text-slate-500'}`}>Vencimento</p>
+                            <p className={`text-lg font-bold ${daysRemaining <= 5 ? 'text-red-500' : 'text-emerald-400'}`}>
+                                {daysRemaining > 0 ? `Falta ${daysRemaining} dias` : 'Vencido'}
+                            </p>
+                        </div>
 
-                    <div className="flex justify-between text-sm">
-                        <span className="text-slate-400">Status</span>
-                        <span className={user.active ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                            {user.active ? 'ATIVO' : 'SUSPENSO'}
-                        </span>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Status</span>
+                            <span className={user.active ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                {user.active ? 'ATIVO' : 'SUSPENSO'}
+                            </span>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
 

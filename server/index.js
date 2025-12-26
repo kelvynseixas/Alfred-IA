@@ -307,19 +307,50 @@ app.post('/api/admin/users', authenticateToken, async (req, res) => {
         res.json(result.rows[0]);
     } catch (e) { res.status(500).json({error: e.message}); }
 });
+
 app.patch('/api/admin/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role !== 'ADMIN') return res.sendStatus(403);
-    const { active, trialDaysToAdd, password } = req.body;
+    
+    const { active, trialDaysToAdd, password, subscription } = req.body;
+    const updates = [];
+    const values = [];
+    let queryIndex = 1;
+
     try {
-        if (active !== undefined) await pool.query('UPDATE users SET active = $1 WHERE id = $2', [active, req.params.id]);
-        if (trialDaysToAdd) await pool.query("UPDATE users SET trial_ends_at = trial_ends_at + interval '1 day' * $1 WHERE id = $2", [trialDaysToAdd, req.params.id]);
+        if (active !== undefined) {
+            updates.push(`active = $${queryIndex++}`);
+            values.push(active);
+        }
+        if (trialDaysToAdd) {
+            // Use COALESCE to handle cases where trial_ends_at is NULL, defaulting to now()
+            updates.push(`trial_ends_at = COALESCE(trial_ends_at, NOW()) + interval '1 day' * $${queryIndex++}`);
+            values.push(trialDaysToAdd);
+        }
         if (password) {
             const hash = await bcrypt.hash(password, 10);
-            await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.params.id]);
+            updates.push(`password_hash = $${queryIndex++}`);
+            values.push(hash);
         }
-        res.json({success: true});
-    } catch (e) { res.status(500).json({error: e.message}); }
+        if (subscription) {
+            updates.push(`subscription = $${queryIndex++}`);
+            values.push(subscription);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+        }
+        
+        const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${queryIndex}`;
+        values.push(req.params.id);
+
+        await pool.query(query, values);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Update user error:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
+
 app.post('/api/admin/plans', authenticateToken, async (req, res) => {
     if (req.user.role !== 'ADMIN') return res.sendStatus(403);
     const { id, price, trialDays } = req.body;

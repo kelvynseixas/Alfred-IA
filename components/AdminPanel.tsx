@@ -36,9 +36,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
   });
 
   // Forms States
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', isTestUser: false });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', isTestUser: false, subscription: '' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [userEditForm, setUserEditForm] = useState({ password: '', trialDaysToAdd: 0 });
+  const [userEditForm, setUserEditForm] = useState({ password: '', trialDaysToAdd: 0, subscription: '' });
   const [newCoupon, setNewCoupon] = useState<{ code: string, value: number, type: 'PERCENTAGE' | 'FIXED', appliesTo: SubscriptionType[] }>({ 
       code: '', value: 0, type: 'PERCENTAGE', appliesTo: [] 
   });
@@ -86,9 +86,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
 
   // --- Handlers ---
   const handleCreateUser = async () => {
+      if (!newUser.name || !newUser.email || !newUser.password || (!newUser.isTestUser && !newUser.subscription)) {
+        alert("Por favor, preencha todos os campos obrigatórios.");
+        return;
+      }
       setLoading(true);
       await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(newUser) });
-      setNewUser({ name: '', email: '', password: '', isTestUser: false });
+      setNewUser({ name: '', email: '', password: '', isTestUser: false, subscription: '' });
       onAddUser();
       setLoading(false);
   };
@@ -97,10 +101,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
       const body: any = {};
       if (active !== undefined) body.active = active;
       if (userEditForm.password) body.password = userEditForm.password;
-      if (userEditForm.trialDaysToAdd) body.trialDaysToAdd = userEditForm.trialDaysToAdd;
+      if (userEditForm.trialDaysToAdd > 0) body.trialDaysToAdd = userEditForm.trialDaysToAdd;
+      if (userEditForm.subscription && userEditForm.subscription !== editingUser?.subscription) {
+          body.subscription = userEditForm.subscription;
+      }
+
+      if (Object.keys(body).length === 0) {
+          setEditingUser(null);
+          return;
+      }
+
       await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` }, body: JSON.stringify(body) });
       setEditingUser(null);
-      setUserEditForm({ password: '', trialDaysToAdd: 0 });
+      setUserEditForm({ password: '', trialDaysToAdd: 0, subscription: '' });
       onUpdateUser();
   };
 
@@ -146,7 +159,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
 
   // Dashboard calculations
   const planStats = plans.map(plan => {
-     const count = users.filter(u => u.subscription === plan.id || u.planId === plan.id).length;
+     const count = users.filter(u => !u.isTestUser && (u.subscription === plan.id || u.planId === plan.id)).length;
      const revenue = count * plan.price;
      return { name: plan.name, count, revenue };
   });
@@ -182,8 +195,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
               {/* Metrics Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-                      <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Total Usuários</h3>
-                      <p className="text-3xl text-white font-serif">{users.length}</p>
+                      <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Total Clientes</h3>
+                      <p className="text-3xl text-white font-serif">{users.filter(u => !u.isTestUser).length}</p>
                   </div>
                   {planStats.map(stat => (
                       <div key={stat.name} className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
@@ -201,12 +214,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                    <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2"><UserPlus size={20} className="text-emerald-500" /> Gestão de Clientes</h3>
                    
                    {/* Create Client Form */}
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end mb-8 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                       <input placeholder="Nome" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className={inputClass} />
-                       <input placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className={inputClass} />
-                       <input placeholder="Senha" type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className={inputClass} />
-                       <div className="flex items-center gap-2 h-10"><input type="checkbox" checked={newUser.isTestUser} onChange={e => setNewUser({...newUser, isTestUser: e.target.checked})} /><span className="text-slate-300 text-sm">Cliente Teste</span></div>
-                       <button onClick={handleCreateUser} disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded text-sm font-bold">{loading ? <Loader2 className="animate-spin mx-auto"/> : 'Criar Cliente'}</button>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <input placeholder="Nome" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className={inputClass} />
+                        <input placeholder="Email" type="email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className={inputClass} />
+                        <input placeholder="Senha" type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className={inputClass} />
+                        <select value={newUser.subscription} onChange={e => setNewUser({...newUser, subscription: e.target.value})} className={inputClass} required={!newUser.isTestUser}>
+                            <option value="" disabled>Selecione um Plano</option>
+                            {plans.map(p => <option key={p.id} value={p.id}>{p.name} - R${p.price.toFixed(2)}</option>)}
+                        </select>
+                        <div className="flex items-center gap-2 h-10"><input type="checkbox" id="isTestUser" checked={newUser.isTestUser} onChange={e => setNewUser({...newUser, isTestUser: e.target.checked})} className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-gold-500 focus:ring-gold-500" /><label htmlFor="isTestUser" className="text-slate-300 text-sm">Cliente Teste</label></div>
+                        <button onClick={handleCreateUser} disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded text-sm font-bold">{loading ? <Loader2 className="animate-spin mx-auto"/> : 'Criar Cliente'}</button>
                    </div>
                    
                    {/* Table */}
@@ -217,10 +234,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                                {users.map(u => (
                                    <tr key={u.id} className="border-b border-slate-800 hover:bg-slate-800/30">
                                        <td className="p-3"><p className="text-white font-medium">{u.name} {u.isTestUser && <span className="text-xs bg-blue-600 px-1 rounded ml-2">TESTE</span>}</p><p className="text-xs">{u.email}</p></td>
-                                       <td className="p-3">{u.subscription}</td>
-                                       <td className="p-3 text-gold-500">{u.trialEndsAt ? new Date(u.trialEndsAt).toLocaleDateString() : '-'}</td>
+                                       <td className="p-3">{u.isTestUser ? <span className="font-bold text-blue-400">TESTER</span> : u.subscription}</td>
+                                       <td className="p-3 text-gold-500">{u.isTestUser ? 'Ilimitado' : (u.trialEndsAt ? new Date(u.trialEndsAt).toLocaleDateString() : '-')}</td>
                                        <td className="p-3"><button onClick={() => handleUpdateUser(u.id, !u.active)} className={`px-2 py-1 rounded text-xs font-bold ${u.active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{u.active ? 'ATIVO' : 'SUSPENSO'}</button></td>
-                                       <td className="p-3 text-right"><button onClick={() => setEditingUser(u)} className="text-slate-400 hover:text-white p-1 bg-slate-800 rounded"><Edit size={16}/></button></td>
+                                       <td className="p-3 text-right"><button onClick={() => { setEditingUser(u); setUserEditForm({ password: '', trialDaysToAdd: 0, subscription: u.subscription || '' }); }} className="text-slate-400 hover:text-white p-1 bg-slate-800 rounded"><Edit size={16}/></button></td>
                                    </tr>
                                ))}
                            </tbody>
@@ -234,8 +251,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, plans, coupons, t
                        <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md">
                            <h3 className="text-white text-lg font-bold mb-4">Gerenciar: {editingUser.name}</h3>
                            <div className="space-y-4">
+                               <div>
+                                  <label className="text-xs text-slate-400">Plano</label>
+                                  <select value={userEditForm.subscription} onChange={e => setUserEditForm({...userEditForm, subscription: e.target.value})} className={inputClass} disabled={editingUser.isTestUser}>
+                                      {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                  </select>
+                               </div>
                                <div><label className="text-xs text-slate-400">Alterar Senha</label><input type="text" placeholder="Nova senha..." value={userEditForm.password} onChange={e => setUserEditForm({...userEditForm, password: e.target.value})} className={inputClass} /></div>
-                               <div><label className="text-xs text-slate-400">Adicionar Dias</label><div className="flex gap-2"><button onClick={() => setUserEditForm({...userEditForm, trialDaysToAdd: 30})} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">+30d</button><button onClick={() => setUserEditForm({...userEditForm, trialDaysToAdd: 365})} className="bg-slate-800 text-white px-3 py-1 rounded text-xs">+1 Ano</button></div></div>
+                               <div>
+                                  <label className="text-xs text-slate-400">Adicionar Dias de Teste</label>
+                                  <div className="flex gap-2">
+                                    <input type="number" value={userEditForm.trialDaysToAdd} onChange={e => setUserEditForm({...userEditForm, trialDaysToAdd: parseInt(e.target.value) || 0})} className={`${inputClass} w-full`} disabled={editingUser.isTestUser} />
+                                  </div>
+                               </div>
                                <button onClick={() => handleUpdateUser(editingUser.id)} className="w-full bg-gold-600 text-white font-bold py-2 rounded">Salvar</button>
                                <button onClick={() => setEditingUser(null)} className="w-full text-slate-400 text-sm py-2">Cancelar</button>
                            </div>
