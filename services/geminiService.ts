@@ -64,8 +64,8 @@ export const sendMessageToAlfred = async (
     }
 
     const ai = new GoogleGenAI({ apiKey: key });
-    // Usando gemini-2.0-flash-exp para suporte multimodal via HTTP requests
-    const model = 'gemini-2.0-flash-exp'; 
+    // Usando gemini-2.5-flash-latest para estabilidade
+    const model = 'gemini-2.5-flash-latest'; 
     
     // Contexto simplificado
     const tasksSimple = contextData.tasks.map((t:any) => ({ id: t.id, title: t.title, date: t.date })).slice(0, 5);
@@ -126,9 +126,17 @@ export const sendMessageToAlfred = async (
   } catch (error) {
     console.error("Erro AI:", error);
     console.error("Texto bruto da IA que causou o erro:", rawTextFromAI); 
-    // Se o erro for de API, retorna o erro técnico no console e mensagem amigável
+    
+    const errorStr = String(error);
+    if (errorStr.includes('404')) {
+         return {
+            reply: "Não consegui acessar o modelo Gemini. Verifique se sua chave de API suporta o modelo 'gemini-2.5-flash-latest' ou atualize-a no Painel Master.",
+            action: { type: 'NONE', payload: null }
+        };
+    }
+    
     return {
-      reply: "Peço perdão, Senhor. Tive uma falha em meus circuitos de dedução. Verifique se o áudio está claro e se sua chave de API possui acesso ao modelo gemini-2.0-flash-exp.",
+      reply: "Peço perdão, Senhor. Tive uma instabilidade momentânea. Poderia repetir?",
       action: { type: 'NONE', payload: null }
     };
   }

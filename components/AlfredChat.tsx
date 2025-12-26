@@ -16,7 +16,7 @@ interface Message {
   text: string;
   timestamp: Date;
   imageUrl?: string;
-  audioUrl?: string; // Para reproduzir o áudio enviado
+  audioUrl?: string; // Caminho do arquivo ou Base64 para preview local
 }
 
 export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, isOpen, onClose }) => {
@@ -72,9 +72,10 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       }
   };
 
-  const saveMessageToDb = async (msg: Partial<Message>) => {
+  // Salva no banco e retorna URLs reais dos arquivos salvos
+  const saveMessageToDb = async (msg: Partial<Message>, audioBase64?: string, imageBase64?: string) => {
       try {
-          await fetch('/api/chat', {
+          const res = await fetch('/api/chat', {
               method: 'POST',
               headers: { 
                   'Content-Type': 'application/json',
@@ -83,11 +84,15 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
               body: JSON.stringify({
                   sender: msg.sender,
                   text: msg.text,
-                  imageUrl: msg.imageUrl,
-                  audioUrl: msg.audioUrl
+                  imageUrl: imageBase64 || msg.imageUrl,
+                  audioUrl: audioBase64 || msg.audioUrl
               })
           });
+          if (res.ok) {
+              return await res.json();
+          }
       } catch (e) { console.error(e); }
+      return null;
   };
 
   const scrollToBottom = () => {
@@ -101,12 +106,13 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   const handleSend = async (audioBlob?: Blob) => {
     if (!input.trim() && !selectedImage && !audioBlob) return;
 
+    setLoading(true);
+
     let audioBase64 = '';
     let audioPreviewUrl = '';
 
     if (audioBlob) {
         audioPreviewUrl = URL.createObjectURL(audioBlob);
-        // Converter Blob para Base64
         audioBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
@@ -114,24 +120,38 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
         });
     }
 
+    const tempId = Date.now().toString();
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: tempId,
       sender: 'user',
       text: input,
       imageUrl: selectedImage || undefined,
-      audioUrl: audioPreviewUrl || undefined, // Nota: audioUrl (blob) não persiste bem no DB simples, ideal seria upload S3
+      audioUrl: audioPreviewUrl || undefined, 
       timestamp: new Date()
     };
 
+    // UI Optimistic Update
     setMessages(prev => [...prev, userMsg]);
-    saveMessageToDb({ ...userMsg, audioUrl: audioBase64 }); // Salva base64 no banco (limitado, mas funcional para demo)
-
     setInput('');
     const imageToSend = selectedImage;
     setSelectedImage(null); 
-    setLoading(true);
 
     try {
+      // 1. SALVAR NO SERVIDOR PRIMEIRO
+      const savedData = await saveMessageToDb(userMsg, audioBase64, imageToSend || undefined);
+      
+      // Atualiza msg com URLs reais do servidor se disponível
+      if (savedData) {
+          setMessages(prev => prev.map(m => m.id === tempId ? {
+              ...m, 
+              imageUrl: savedData.imageUrl || m.imageUrl,
+              audioUrl: savedData.audioUrl || m.audioUrl
+          } : m));
+      }
+
+      // 2. ENVIAR PARA ALFRED (IA)
+      // Nota: Enviamos o base64 para o Gemini pois ele precisa do dado inline, 
+      // mas o sistema já garantiu a persistência no passo 1.
       const response = await sendMessageToAlfred(
           userMsg.text, 
           appContext, 
@@ -147,13 +167,16 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
       };
 
       setMessages(prev => [...prev, alfredMsg]);
-      saveMessageToDb(alfredMsg);
+      
+      // Salva resposta do Alfred no banco
+      await saveMessageToDb(alfredMsg);
 
       if (response.action && response.action.type !== 'NONE') {
         onAIAction(response.action);
       }
 
     } catch (error) {
+      console.error(error);
       const errorMsg: Message = {
         id: Date.now().toString(),
         sender: 'alfred',
@@ -194,7 +217,6 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
           mediaRecorder.onstop = () => {
               const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
               handleSend(audioBlob);
-              // Parar todas as tracks para liberar o microfone
               stream.getTracks().forEach(track => track.stop());
           };
 

@@ -4,6 +4,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +15,13 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.static(path.join(__dirname, '../dist')));
 
+// Configurar pasta de uploads
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+app.use('/uploads', express.static(uploadDir));
+
 const pool = new Pool({
     user: process.env.DB_USER || 'alfred',
     host: process.env.DB_HOST || 'localhost',
@@ -23,6 +31,38 @@ const pool = new Pool({
 });
 
 const SECRET_KEY = process.env.JWT_SECRET || 'alfred_super_secret_key';
+
+// --- HELPER: Base64 to File ---
+const saveBase64File = (base64Data, prefix) => {
+    if (!base64Data || typeof base64Data !== 'string' || !base64Data.startsWith('data:')) {
+        return base64Data; // Retorna original se não for base64 ou se for URL já salva
+    }
+    try {
+        const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) return base64Data;
+        
+        const type = matches[1];
+        const data = matches[2];
+        const buffer = Buffer.from(data, 'base64');
+        
+        // Extensão simples baseada no mime
+        let ext = 'bin';
+        if (type.includes('image/png')) ext = 'png';
+        else if (type.includes('image/jpeg')) ext = 'jpg';
+        else if (type.includes('audio/webm')) ext = 'webm';
+        else if (type.includes('audio/wav')) ext = 'wav';
+        else if (type.includes('audio/mp3') || type.includes('audio/mpeg')) ext = 'mp3';
+        
+        const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1E9)}.${ext}`;
+        const filepath = path.join(uploadDir, filename);
+        
+        fs.writeFileSync(filepath, buffer);
+        return `/uploads/${filename}`;
+    } catch (e) {
+        console.error("Erro ao salvar arquivo:", e);
+        return null; 
+    }
+};
 
 // --- AUTO-MIGRATION SYSTEM ---
 const runMigrations = async () => {
@@ -237,12 +277,24 @@ app.get('/api/chat', authenticateToken, async (req, res) => {
 app.post('/api/chat', authenticateToken, async (req, res) => {
     const { sender, text, imageUrl, audioUrl } = req.body;
     try {
+        // Converter Base64 para Arquivos no disco
+        const savedImagePath = saveBase64File(imageUrl, 'img');
+        const savedAudioPath = saveBase64File(audioUrl, 'audio');
+
         const result = await pool.query(
             'INSERT INTO chat_messages (user_id, sender, text, image_url, audio_url) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-            [req.user.id, sender, text, imageUrl, audioUrl]
+            [req.user.id, sender, text, savedImagePath, savedAudioPath]
         );
-        res.json({ success: true, id: result.rows[0].id });
+        
+        // Retorna os caminhos salvos para o frontend atualizar o estado se necessário
+        res.json({ 
+            success: true, 
+            id: result.rows[0].id,
+            imageUrl: savedImagePath,
+            audioUrl: savedAudioPath 
+        });
     } catch (e) {
+        console.error(e);
         res.status(500).json({ error: e.message });
     }
 });
