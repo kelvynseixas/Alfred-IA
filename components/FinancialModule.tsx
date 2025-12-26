@@ -46,9 +46,12 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
   const filteredData = filterTransactionsByDate(transactions);
 
   // --- Chart Data Logic ---
-  const totalIncome = filteredData.filter(t => t.type === TransactionType.INCOME).reduce((acc, curr) => acc + curr.amount, 0);
-  const totalExpense = filteredData.filter(t => t.type === TransactionType.EXPENSE).reduce((acc, curr) => acc + curr.amount, 0);
-  const totalInvested = filteredData.filter(t => t.type === TransactionType.INVESTMENT).reduce((acc, curr) => acc + curr.amount, 0);
+  // Ensure we parse amount as float because PostgreSQL numeric sometimes returns as string
+  const safeAmount = (amt: any) => parseFloat(amt) || 0;
+
+  const totalIncome = filteredData.filter(t => t.type === TransactionType.INCOME).reduce((acc, curr) => acc + safeAmount(curr.amount), 0);
+  const totalExpense = filteredData.filter(t => t.type === TransactionType.EXPENSE).reduce((acc, curr) => acc + safeAmount(curr.amount), 0);
+  const totalInvested = filteredData.filter(t => t.type === TransactionType.INVESTMENT).reduce((acc, curr) => acc + safeAmount(curr.amount), 0);
   
   const overviewChartData = [
     { name: 'Entradas', value: totalIncome, fill: '#10b981' },
@@ -58,7 +61,8 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
 
   const getCategoryData = (type: TransactionType) => {
       const grouped = filteredData.filter(t => t.type === type).reduce((acc:any, curr) => {
-          acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
+          const val = safeAmount(curr.amount);
+          acc[curr.category] = (acc[curr.category] || 0) + val;
           return acc;
       }, {});
       return Object.keys(grouped).map(k => ({ name: k, value: grouped[k] }));
@@ -100,9 +104,7 @@ export const FinancialModule: React.FC<FinancialModuleProps> = ({ transactions, 
       // Regex para validar formato numérico básico (apenas números e ponto)
       if (!/^\d*\.?\d*$/.test(val)) return;
 
-      // Lógica inteligente para zero à esquerda:
-      // Se tiver mais de 1 caractere, começar com 0 e o segundo caractere NÃO for ponto, remove o zero.
-      // Ex: "05" -> "5". "0." mantem "0.". "0.5" mantem "0.5".
+      // Lógica inteligente para zero à esquerda
       if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
           val = val.replace(/^0+/, '');
       }

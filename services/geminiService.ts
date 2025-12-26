@@ -23,7 +23,7 @@ OBJETIVO JSON DE RESPOSTA:
 {
   "reply": "Texto curto, elegante e confirmação da ação",
   "action": {
-    "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "ADD_PROJECT" | "UPDATE_PROJECT" | "NONE",
+    "type": "ADD_TRANSACTION" | "ADD_TASK" | "UPDATE_TASK" | "ADD_LIST_ITEM" | "CREATE_LIST_WITH_ITEMS" | "ADD_PROJECT" | "UPDATE_PROJECT" | "NONE",
     "payload": { ... }
   }
 }
@@ -34,6 +34,7 @@ FORMATOS DE PAYLOAD:
 - UPDATE_PROJECT: { "id": string, "amountToAdd": number } (Use quando o usuário quiser adicionar saldo a um projeto existente)
 - ADD_TASK: { "title": string, "date": string, "time": string, "priority": "low" | "medium" | "high" }
 - ADD_LIST_ITEM: { "listId": string (OBRIGATÓRIO - use o ID da lista do contexto), "name": string }
+- CREATE_LIST_WITH_ITEMS: { "listName": string, "items": string[] } (Use quando o usuário listar vários itens e não houver lista adequada no contexto)
 
 CASOS DE USO:
 Usuário: "Gastei 50 no ifood"
@@ -45,14 +46,14 @@ JSON: { "reply": "Criei o projeto Carro.", "action": { "type": "ADD_PROJECT", "p
 Usuário: "Guardei 500 reais pro carro" (Se JÁ existir projeto Carro com ID "123")
 JSON: { "reply": "Atualizei o saldo do projeto Carro.", "action": { "type": "UPDATE_PROJECT", "payload": { "id": "123", "amountToAdd": 500 } } }
 
-Usuário: "adicione leite na lista de compras"
-(Contexto: [{ "id": "1", "name": "Compras" }])
-JSON: { "reply": "Leite adicionado à sua lista de compras.", "action": { "type": "ADD_LIST_ITEM", "payload": { "listId": "1", "name": "Leite" } } }
+Usuário: "Preciso comprar cimento, areia e brita pra obra" (Contexto: SEM lista 'Obras' ou 'Materiais')
+JSON: { "reply": "Criei a lista 'Obras' com os itens solicitados.", "action": { "type": "CREATE_LIST_WITH_ITEMS", "payload": { "listName": "Obras", "items": ["Cimento", "Areia", "Brita"] } } }
 `;
 
 export const sendMessageToAlfred = async (
   message: string,
-  contextData: any
+  contextData: any,
+  imageBase64?: string
 ): Promise<AIResponse> => {
   let rawTextFromAI = '';
   try {
@@ -78,9 +79,23 @@ export const sendMessageToAlfred = async (
       MENSAGEM DO USUÁRIO: "${message}"
     `;
 
+    // Montar conteúdo (Texto + Imagem Opcional)
+    const contents: any[] = [{ text: contextPrompt }];
+    
+    if (imageBase64) {
+        // Remove header do base64 se existir (data:image/png;base64,)
+        const base64Data = imageBase64.split(',')[1] || imageBase64;
+        contents.push({
+            inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Data
+            }
+        });
+    }
+
     const response = await ai.models.generateContent({
       model: model,
-      contents: contextPrompt,
+      contents: contents, // Passa array de partes
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -97,7 +112,7 @@ export const sendMessageToAlfred = async (
 
   } catch (error) {
     console.error("Erro AI:", error);
-    console.error("Texto bruto da IA que causou o erro:", rawTextFromAI); // Log do texto problemático
+    console.error("Texto bruto da IA que causou o erro:", rawTextFromAI); 
     return {
       reply: "Peço perdão, Senhor. Tive uma falha em meus circuitos de dedução. Poderia repetir de forma mais clara?",
       action: { type: 'NONE', payload: null }

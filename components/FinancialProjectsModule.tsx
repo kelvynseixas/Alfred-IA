@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FinancialProject } from '../types';
-import { Target, Plus, X, Trash2, TrendingUp, PiggyBank, Briefcase } from 'lucide-react';
+import { Target, Plus, X, Trash2, TrendingUp, PiggyBank, Briefcase, Edit2 } from 'lucide-react';
 
 interface ProjectsModuleProps {
   projects: FinancialProject[];
@@ -12,6 +12,7 @@ interface ProjectsModuleProps {
 
 export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ projects = [], isDarkMode, onAddProject, onUpdateProject, onDeleteProject }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newProject, setNewProject] = useState({ title: '', description: '', targetAmount: '', deadline: '', category: 'GOAL' as any });
   const [amountInput, setAmountInput] = useState<{[key:string]: string}>({});
 
@@ -25,17 +26,44 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
       return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  const openNewProject = () => {
+      setEditingId(null);
+      setNewProject({ title: '', description: '', targetAmount: '', deadline: '', category: 'GOAL' });
+      setIsModalOpen(true);
+  };
+
+  const openEditProject = (proj: FinancialProject) => {
+      setEditingId(proj.id);
+      setNewProject({
+          title: proj.title,
+          description: proj.description || '',
+          targetAmount: proj.targetAmount.toString(),
+          deadline: proj.deadline ? proj.deadline.split('T')[0] : '',
+          category: proj.category
+      });
+      setIsModalOpen(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onAddProject({
+      
+      const payload = {
           title: newProject.title,
           description: newProject.description,
           targetAmount: safeNumber(newProject.targetAmount),
           deadline: newProject.deadline,
           category: newProject.category
-      });
+      };
+
+      if (editingId) {
+          onUpdateProject(editingId, payload);
+      } else {
+          onAddProject(payload);
+      }
+      
       setIsModalOpen(false);
       setNewProject({ title: '', description: '', targetAmount: '', deadline: '', category: 'GOAL' });
+      setEditingId(null);
   };
 
   const handleUpdateAmount = (id: string, current: number, add: boolean) => {
@@ -49,20 +77,14 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
 
   const handleInputChange = (id: string, value: string) => {
        let val = value;
-       // Permite limpar o campo
       if (val === '') {
           setAmountInput({...amountInput, [id]: ''});
           return;
       }
-
-      // Regex para validar formato numérico básico (apenas números e ponto)
       if (!/^\d*\.?\d*$/.test(val)) return;
-
-      // Remove zero à esquerda se houver mais números
       if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
           val = val.replace(/^0+/, '');
       }
-      
       setAmountInput({...amountInput, [id]: val});
   };
 
@@ -80,7 +102,7 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                 <h2 className={`text-3xl font-serif ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Projetos & Reservas</h2>
                 <p className="text-slate-400">Metas financeiras e fundos de emergência.</p>
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="bg-gold-600 hover:bg-gold-500 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+            <button onClick={openNewProject} className="bg-gold-600 hover:bg-gold-500 text-white px-4 py-2 rounded-lg flex items-center gap-2">
                 <Plus size={18} /> Novo Projeto
             </button>
         </header>
@@ -109,7 +131,10 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                                 </p>
                             </div>
                         </div>
-                        <button onClick={() => onDeleteProject(proj.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={16}/></button>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => openEditProject(proj)} className="text-slate-500 hover:text-white"><Edit2 size={16}/></button>
+                            <button onClick={() => onDeleteProject(proj.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={16}/></button>
+                        </div>
                     </div>
                     
                     <div className="mb-4">
@@ -160,7 +185,7 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-serif text-white">Novo Projeto</h3>
+                        <h3 className="text-xl font-serif text-white">{editingId ? 'Editar Projeto' : 'Novo Projeto'}</h3>
                         <button onClick={() => setIsModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,7 +199,7 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
                                  <option value="ASSET">Patrimônio</option>
                              </select>
                         </div>
-                        <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-2 rounded mt-2">Criar Projeto</button>
+                        <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-white font-bold py-2 rounded mt-2">{editingId ? 'Salvar Alterações' : 'Criar Projeto'}</button>
                     </form>
                 </div>
              </div>

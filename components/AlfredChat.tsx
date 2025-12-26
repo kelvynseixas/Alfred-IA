@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToAlfred } from '../services/geminiService';
-import { Mic, Send, Paperclip, Loader2, User as UserIcon } from 'lucide-react';
+import { Mic, Send, Paperclip, Loader2, User as UserIcon, X, Image as ImageIcon } from 'lucide-react';
 import { ALFRED_ICON_URL } from '../App';
 
 interface AlfredChatProps {
@@ -15,6 +15,7 @@ interface Message {
   sender: 'user' | 'alfred';
   text: string;
   timestamp: Date;
+  imageUrl?: string;
 }
 
 export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, isOpen, onClose }) => {
@@ -28,7 +29,11 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,21 +44,24 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   }, [messages, isOpen]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedImage) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: 'user',
       text: input,
+      imageUrl: selectedImage || undefined,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    const imageToSend = selectedImage;
+    setSelectedImage(null); // Clear image immediately after sending UI update
     setLoading(true);
 
     try {
-      const response = await sendMessageToAlfred(userMsg.text, appContext);
+      const response = await sendMessageToAlfred(userMsg.text, appContext, imageToSend || undefined);
       
       const alfredMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -78,6 +86,39 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              if (event.target?.result) {
+                  setSelectedImage(event.target.result as string);
+              }
+          };
+          reader.readAsDataURL(e.target.files[0]);
+      }
+  };
+
+  const startListening = () => {
+      if (!('webkitSpeechRecognition' in window)) {
+          alert('Seu navegador não suporta reconhecimento de voz.');
+          return;
+      }
+      
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      };
+
+      recognition.start();
   };
 
   if (!isOpen) return null;
@@ -106,11 +147,16 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div 
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed flex flex-col gap-2
                 ${msg.sender === 'user' 
                     ? 'bg-slate-700 text-white rounded-br-none' 
                     : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none shadow-lg'}`}
             >
+              {msg.imageUrl && (
+                  <div className="rounded-lg overflow-hidden border border-white/10 mb-1">
+                      <img src={msg.imageUrl} alt="Anexo" className="w-full h-auto max-h-48 object-cover" />
+                  </div>
+              )}
               {msg.text}
             </div>
           </div>
@@ -128,8 +174,27 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
 
       {/* Input Area - WhatsApp Style */}
       <div className="p-4 bg-slate-900 border-t border-slate-800">
+        {selectedImage && (
+            <div className="mb-2 p-2 bg-slate-800 rounded-lg flex items-center justify-between border border-slate-700">
+                <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded overflow-hidden">
+                        <img src={selectedImage} className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-xs text-slate-300">Imagem anexada</span>
+                </div>
+                <button onClick={() => setSelectedImage(null)} className="p-1 hover:bg-slate-700 rounded-full"><X size={14} className="text-slate-400" /></button>
+            </div>
+        )}
+
         <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-full border border-slate-700">
-            <button className="p-2 text-slate-400 hover:text-white transition-colors">
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                className="hidden" 
+                accept="image/*"
+            />
+            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-white transition-colors" title="Anexar Imagem">
                 <Paperclip className="w-5 h-5" />
             </button>
             <input 
@@ -140,7 +205,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                 placeholder="Mensagem para Alfred..."
                 className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-slate-500"
             />
-            {input.trim() ? (
+            {input.trim() || selectedImage ? (
                 <button 
                     onClick={handleSend}
                     className="p-2 bg-gold-600 hover:bg-gold-500 text-white rounded-full transition-colors"
@@ -148,7 +213,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                     <Send className="w-4 h-4" />
                 </button>
             ) : (
-                <button className="p-2 text-slate-400 hover:text-white transition-colors">
+                <button onClick={startListening} className={`p-2 transition-colors rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>
                     <Mic className="w-5 h-5" />
                 </button>
             )}

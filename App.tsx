@@ -215,7 +215,7 @@ const App = () => {
             const payload = {
                 title: raw.title || 'Novo Projeto',
                 description: raw.description || '',
-                targetAmount: sanitizeNumber(raw.targetAmount),
+                targetAmount: sanitizeNumber(raw.targetAmount) || 0,
                 deadline: raw.deadline || null,
                 category: raw.category || 'GOAL'
             };
@@ -248,7 +248,7 @@ const App = () => {
              }
         }
 
-        // --- LISTAS ---
+        // --- LISTAS (ITEM ÚNICO) ---
         else if (action.type === 'ADD_LIST_ITEM') {
             const raw = action.payload || {};
             if (raw.listId && raw.name) {
@@ -258,6 +258,33 @@ const App = () => {
                     body: JSON.stringify({ name: raw.name })
                 });
                 fetchDashboardData();
+            }
+        }
+
+        // --- LISTAS (CRIAÇÃO COMPLETA) ---
+        else if (action.type === 'CREATE_LIST_WITH_ITEMS') {
+            const { listName, items } = action.payload;
+            if (listName && Array.isArray(items)) {
+                // 1. Criar a lista
+                const res = await fetch('/api/lists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ name: listName })
+                });
+                
+                if (res.ok) {
+                    const newList = await res.json();
+                    // 2. Adicionar itens sequencialmente
+                    for (const item of items) {
+                         await fetch(`/api/lists/${newList.id}/items`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ name: item })
+                        });
+                    }
+                    setActiveModule(ModuleType.LISTS);
+                    fetchDashboardData();
+                }
             }
         }
 
