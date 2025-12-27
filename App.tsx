@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { 
   ModuleType, Transaction, Task, TaskStatus, ListGroup, User, FinancialProject, Account, Investment, Plan, Tutorial, Announcement
@@ -17,49 +18,62 @@ import { LayoutDashboard, CheckSquare, List, LogOut, Target, Briefcase, Menu, X,
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%230f172a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%231e293b;stop-opacity:1' /%3E%3C/linearGradient%E3%80%88/defs%3E%3Ccircle cx='100' cy='100' r='90' fill='url(%23grad1)' stroke='%23d97706' stroke-width='4'/%3E%3Cpath d='M65 80 Q 80 95 95 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M105 80 Q 120 95 135 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Crect x='50' y='60' width='100' height='20' rx='5' fill='%2338bdf8' opacity='0.2'/%3E%3Cpath d='M100 130 Q 130 130 140 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 130 Q 70 130 60 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 150 L 100 170' stroke='%23d97706' stroke-width='6'/%3E%3Cpath d='M70 170 L 130 170 L 115 190 L 85 190 Z' fill='%23d97706'/%3E%3Cpath d='M90 170 L 90 180 L 110 180 L 110 170' fill='%230f172a'/%3E%3Ccircle cx='100' cy='100' r='95' stroke='%23d97706' stroke-width='2' fill='none' opacity='0.5'/%3E%3C/svg%3E";
 
 const App = () => {
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [isAuthenticated, setIsAuthenticated] = React.useState(!!localStorage.getItem('alfred_token'));
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [activeModule, setActiveModule] = React.useState<ModuleType>(ModuleType.FINANCE);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [isChatOpen, setIsChatOpen] = React.useState(false);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   
-  // App Data State
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [user, setUser] = React.useState<User | null>(null);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [users, setUsers] = React.useState<User[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [accounts, setAccounts] = React.useState<Account[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [tasks, setTasks] = React.useState<Task[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [lists, setLists] = React.useState<ListGroup[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [projects, setProjects] = React.useState<FinancialProject[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [investments, setInvestments] = React.useState<Investment[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [plans, setPlans] = React.useState<Plan[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [tutorials, setTutorials] = React.useState<Tutorial[]>([]);
-  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
   const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
 
-  // FIX: Use React.useEffect to resolve "Cannot find name 'useEffect'" error.
   React.useEffect(() => {
-    if (isAuthenticated) fetchDashboardData();
+    if (isAuthenticated) {
+        fetchDashboardData();
+    }
   }, [isAuthenticated]);
+
+  const handleLogin = async (email: string, pass: string): Promise<boolean> => {
+      try {
+          const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password: pass })
+          });
+          if (res.ok) {
+              const { token } = await res.json();
+              localStorage.setItem('alfred_token', token);
+              setIsAuthenticated(true);
+              return true;
+          }
+          return false;
+      } catch (error) {
+          console.error("Login failed:", error);
+          return false;
+      }
+  };
 
   const fetchDashboardData = async () => {
     try {
-        const res = await fetch('/api/data/dashboard', { headers: { 'Authorization': `Bearer ${localStorage.getItem('alfred_token')}` } });
-        const data = await res.json();
+        const token = localStorage.getItem('alfred_token');
+        if (!token) {
+            handleLogout();
+            return;
+        }
+        const res = await fetch('/api/data/dashboard', { 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
+        
         if (res.ok) {
+            const data = await res.json();
             setUser(data.user || null);
             setUsers(data.users || []);
             setTransactions(data.transactions || []);
@@ -74,16 +88,20 @@ const App = () => {
             if (data.config?.aiKeys?.gemini) {
                 sessionStorage.setItem('VITE_GEMINI_KEY', data.config.aiKeys.gemini);
             }
-        } else {
+        } else if (res.status === 401 || res.status === 403) {
+            // Token is invalid or expired, force logout
             handleLogout();
+        } else {
+            // Handle other server errors without logging out
+            console.error("Failed to fetch dashboard data:", res.statusText);
         }
     } catch (e) { 
-        console.error("Erro ao buscar dados:", e);
-        handleLogout();
+        console.error("Error fetching data:", e);
+        // Do not logout on network errors, allow user to stay on page
     }
   };
 
-  const handleAIAction = async (action: { type: string, payload: any }) => {
+  const handleAIAction = (action: { type: string, payload: any }) => {
       fetchDashboardData();
   };
   
@@ -94,7 +112,7 @@ const App = () => {
       setUser(null);
   };
 
-  if (!isAuthenticated) return <LoginPage onLogin={() => setIsAuthenticated(true)} onRegister={()=>{}} plans={[]} isDarkMode={true} />;
+  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} onRegister={()=>{}} plans={[]} isDarkMode={true} />;
   
   const btnClass = (mod: ModuleType) => `w-full text-left p-3 rounded-lg flex gap-3 transition-colors ${activeModule === mod ? 'bg-slate-800 text-gold-400 font-medium' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`;
 
