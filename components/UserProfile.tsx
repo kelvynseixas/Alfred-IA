@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Plan, PaymentHistory, SubscriptionType } from '../types';
+// FIX: Removed PaymentHistory from import as it is now correctly typed via the User interface.
+import { User, Plan, SubscriptionType } from '../types';
 import { User as UserIcon, Lock, Eye, EyeOff, Camera, FileText, CreditCard, X, QrCode, Barcode, CheckCircle, Loader2, Save, AlertCircle } from 'lucide-react';
 
 interface UserProfileProps {

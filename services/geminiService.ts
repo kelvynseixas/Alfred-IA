@@ -25,7 +25,7 @@ Retorne APENAS um objeto JSON. Sem markdown.
 }
 
 **AÇÕES DISPONÍVEIS:**
-- ADD_TRANSACTION: { "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"RESERVE", "category": string, "accountId": string, "projectId": string (se for RESERVE), "recurrencePeriod": "NONE"|"DAILY"|"WEEKLY"|"MONTHLY"|"YEARLY", "recurrenceInterval": number, "recurrenceCount": number }
+- ADD_TRANSACTION: { "description": string, "amount": number, "type": "INCOME"|"EXPENSE"|"RESERVE", "category": string, "accountId": string, "projectId": string (se for RESERVE), "recurrencePeriod": "NONE"|"DAILY"|"WEEKLY"|"MONTHLY"|"YEARLY" }
 - ADD_INVESTMENT: { "name": string, "type": "CDB"|"TESOURO"|"ACOES"|..., "institution": string, "initialAmount": number, "interestRate": string, "startDate": "ISOString" }
 - ADD_TASK: { "title": string, "date": "ISOString", "priority": "low"|"medium"|"high", "recurrencePeriod": "NONE"|... }
 
@@ -34,16 +34,11 @@ Se o Patrão pedir para criar algo, identifique os dados. Se faltar a conta, per
 
 export const sendMessageToAlfred = async (
   message: string,
-  contextData: any,
-  imageBase64?: string,
-  audioBase64?: string
+  contextData: any
 ): Promise<AIResponse> => {
   try {
-    const key = sessionStorage.getItem('VITE_GEMINI_KEY');
-    if (!key) {
-        return { reply: "Perdão, Senhor. Minha chave de ativação não foi configurada no Painel Master.", action: { type: 'NONE', payload: null } };
-    }
-    const ai = new GoogleGenAI({ apiKey: key });
+    // FIX: Per @google/genai guidelines, the API key must be obtained exclusively from process.env.API_KEY.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const contextPrompt = `
       CONTEXTO ATUAL:
@@ -52,24 +47,16 @@ export const sendMessageToAlfred = async (
       - Investimentos: ${JSON.stringify(contextData.investments)}
       - Tarefas: ${JSON.stringify(contextData.tasks)}
       
-      MENSAGEM DO PATRÃO: "${message || '(Áudio/Imagem Enviada)'}"
+      DADOS DO PATRÃO: "${message}"
       
       Se ele mencionar um projeto como "Celular" ou conta como "Nubank", localize o ID no contexto acima.
     `;
-    
-    const contents: any[] = [{ text: contextPrompt }];
-    if (imageBase64) {
-        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
-        contents.push({ inlineData: { mimeType: "image/jpeg", data: cleanBase64 } });
-    }
-    if (audioBase64) {
-        const cleanAudio = audioBase64.includes('base64,') ? audioBase64.split('base64,')[1] : audioBase64;
-        contents.push({ inlineData: { mimeType: "audio/webm", data: cleanAudio } });
-    }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: contents,
+      // FIX: Upgraded model to gemini-3-pro-preview, which is better suited for complex reasoning and JSON generation.
+      model: 'gemini-3-pro-preview',
+      // FIX: Per @google/genai guidelines, the 'contents' for a single-turn request should be a simple string.
+      contents: contextPrompt,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
@@ -77,8 +64,7 @@ export const sendMessageToAlfred = async (
     });
 
     const resultText = response.text || "{}";
-    const cleanJson = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
-    return JSON.parse(cleanJson) as AIResponse;
+    return JSON.parse(resultText) as AIResponse;
   } catch (error) {
     console.error("Erro na comunicação com o Alfred:", error);
     return {

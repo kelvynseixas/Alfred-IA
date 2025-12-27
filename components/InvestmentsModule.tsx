@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Investment } from '../types';
-import { TrendingUp, Plus, Landmark, Trash2, X } from 'lucide-react';
+import { TrendingUp, Plus, Landmark, Trash2 } from 'lucide-react';
 
 interface InvestmentsModuleProps {
   investments: Investment[];
@@ -26,6 +26,7 @@ export const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({ investment
       currentAmount: parseFloat(newInv.currentAmount || newInv.initialAmount),
     } as any);
     setIsModalOpen(false);
+    setNewInv({ name: '', type: 'CDB', institution: '', initialAmount: '', currentAmount: '', interestRate: '', startDate: '', dueDate: '', liquidity: 'DAILY', notes: '' });
   };
 
   return (
@@ -72,7 +73,7 @@ export const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({ investment
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-serif text-white">Cadastrar Nova Aplicação</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20}/></button></div>
+            <h3 className="text-xl font-serif text-white mb-6">Cadastrar Nova Aplicação</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <input placeholder="Nome do Título (ex: Tesouro Selic 2029)" required className="w-full bg-slate-850 border border-slate-700 p-3 rounded-lg text-white" value={newInv.name} onChange={e => setNewInv({...newInv, name: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
