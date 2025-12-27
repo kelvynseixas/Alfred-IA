@@ -6,6 +6,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+// Critical Sanity Check for Database Connection
+if (!process.env.DATABASE_URL) {
+    console.error('FATAL ERROR: DATABASE_URL environment variable is not set.');
+    console.error('Please create a .env file in the /server directory with the DATABASE_URL.');
+    process.exit(1); // Exit the process with an error code
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
