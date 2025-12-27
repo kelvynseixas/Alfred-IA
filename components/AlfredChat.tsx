@@ -51,27 +51,38 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
     if (!input.trim() && !selectedImage && !audioBlob) return;
 
     setLoading(true);
-    const tempId = Date.now().toString();
-    
-    let audioPreviewUrl = audioBlob ? URL.createObjectURL(audioBlob) : undefined;
+    let audioBase64: string | undefined;
+
+    if (audioBlob) {
+        audioBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(audioBlob);
+        });
+    }
     
     const userMsg: Message = {
-      id: tempId,
+      id: Date.now().toString(),
       sender: 'user',
       text: input,
       imageUrl: selectedImage || undefined,
-      audioUrl: audioPreviewUrl,
+      audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : undefined,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMsg]);
     const currentInput = input;
+    const currentImage = selectedImage;
     setInput('');
     setSelectedImage(null);
 
     try {
-      // Reverted: a
-      const response = await sendMessageToAlfred(currentInput, appContext);
+      const response = await sendMessageToAlfred(
+          currentInput, 
+          appContext,
+          currentImage || undefined,
+          audioBase64
+      );
       
       const alfredMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -101,7 +112,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
   const startRecording = async () => {
       try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const mediaRecorder = new MediaRecorder(stream);
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
 
@@ -185,7 +196,7 @@ export const AlfredChat: React.FC<AlfredChatProps> = ({ appContext, onAIAction, 
                 className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-slate-500"
                 disabled={isRecording}
             />
-            {input.trim() ? (
+            {input.trim() || selectedImage ? (
                 <button onClick={() => handleSend()} className="p-2 bg-gold-600 text-slate-900 rounded-full hover:bg-gold-500 transition-all"><Send size={16}/></button>
             ) : (
                 <button 

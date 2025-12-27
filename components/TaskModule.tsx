@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Task, TaskStatus, RecurrencePeriod } from '../types';
-import { Calendar, CheckCircle2, Clock, Plus, Trash2, Repeat } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, Plus, X, Trash2, Repeat } from 'lucide-react';
 
 interface TaskModuleProps {
   tasks: Task[];
@@ -14,19 +14,24 @@ interface TaskModuleProps {
 export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, onAddTask, onEditTask, onDeleteTask }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<string | null>(null);
-  const [taskForm, setTaskForm] = useState<{ title: string, date: string, time: string, priority: 'low'|'medium'|'high' }>({ 
-      title: '', date: '', time: '', priority: 'medium'
+  const [taskForm, setTaskForm] = useState<{ title: string, date: string, time: string, priority: 'low'|'medium'|'high', recurrencePeriod: RecurrencePeriod, recurrenceInterval: string, recurrenceCount: string }>({ 
+      title: '', date: '', time: '', priority: 'medium', recurrencePeriod: 'NONE', recurrenceInterval: '', recurrenceCount: ''
   });
 
   const openNewTaskModal = () => {
       setEditingTask(null);
-      setTaskForm({ title: '', date: '', time: '', priority: 'medium' });
+      setTaskForm({ title: '', date: '', time: '', priority: 'medium', recurrencePeriod: 'NONE', recurrenceInterval: '', recurrenceCount: '' });
       setIsModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const taskData: any = { ...taskForm, status: TaskStatus.PENDING, recurrencePeriod: 'NONE' };
+    const taskData: any = { 
+      ...taskForm,
+      recurrenceInterval: parseInt(taskForm.recurrenceInterval) || undefined,
+      recurrenceCount: parseInt(taskForm.recurrenceCount) || undefined, 
+      status: TaskStatus.PENDING 
+    };
     if (editingTask) onEditTask(editingTask, taskData);
     else onAddTask(taskData);
     setIsModalOpen(false);
@@ -74,12 +79,22 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ tasks, onToggleStatus, o
         {isModalOpen && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6">
-                    <h3 className="text-xl font-serif text-white mb-4">Nova Tarefa</h3>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-serif text-white">Nova Tarefa</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20}/></button></div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <input className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} placeholder="Título da Tarefa" required />
                         <div className="grid grid-cols-2 gap-4">
                              <input type="date" className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" value={taskForm.date} onChange={e => setTaskForm({...taskForm, date: e.target.value})} required />
                              <input type="time" className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white" value={taskForm.time} onChange={e => setTaskForm({...taskForm, time: e.target.value})} />
+                        </div>
+                        <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                          <h4 className="text-sm font-bold text-slate-300 mb-2">Recorrência</h4>
+                          <div className="grid grid-cols-3 gap-4">
+                            <select className="col-span-3 md:col-span-1 bg-slate-850 border border-slate-700 p-3 rounded-lg text-white text-sm" value={taskForm.recurrencePeriod} onChange={e => setTaskForm({...taskForm, recurrencePeriod: e.target.value as any})}>
+                              <option value="NONE">Nunca</option><option value="DAILY">Diário</option><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option><option value="YEARLY">Anual</option>
+                            </select>
+                            <input type="number" placeholder={`A cada X ${taskForm.recurrencePeriod === 'DAILY' ? 'dias' : taskForm.recurrencePeriod.toLowerCase().replace('ly','s')}`} disabled={taskForm.recurrencePeriod === 'NONE'} className="bg-slate-850 border border-slate-700 p-3 rounded-lg text-white text-sm disabled:opacity-50" value={taskForm.recurrenceInterval} onChange={e => setTaskForm({...taskForm, recurrenceInterval: e.target.value})} />
+                            <input type="number" placeholder="Repetir X vezes" disabled={taskForm.recurrencePeriod === 'NONE'} className="bg-slate-850 border border-slate-700 p-3 rounded-lg text-white text-sm disabled:opacity-50" value={taskForm.recurrenceCount} onChange={e => setTaskForm({...taskForm, recurrenceCount: e.target.value})} />
+                          </div>
                         </div>
                         <button type="submit" className="w-full bg-gold-600 hover:bg-gold-500 text-slate-950 font-bold py-3 rounded-lg mt-4">Agendar Tarefa</button>
                     </form>

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { FinancialProject } from '../types';
-import { Target, Plus, Trash2, PiggyBank } from 'lucide-react';
+import { Target, Plus, X, Trash2, PiggyBank } from 'lucide-react';
 
 interface ProjectsModuleProps {
   projects: FinancialProject[];
@@ -101,7 +101,7 @@ export const FinancialProjectsModule: React.FC<ProjectsModuleProps> = ({ project
         {isModalOpen && (
              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6">
-                    <h3 className="text-xl font-serif text-white mb-4">Novo Projeto</h3>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-serif text-white">Novo Projeto</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20}/></button></div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <input placeholder="Título" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white" required />
                         <input type="number" placeholder="Meta (R$)" value={newProject.targetAmount} onChange={e => setNewProject({...newProject, targetAmount: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white" required />

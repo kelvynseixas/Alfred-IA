@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ListGroup, ItemStatus } from '../types';
-import { CheckSquare, Plus, ShoppingCart, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckSquare, Plus, ShoppingCart, Trash2, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ListModuleProps {
   lists: ListGroup[];
@@ -100,7 +100,7 @@ export const ListModule: React.FC<ListModuleProps> = ({ lists, onToggleItem, onD
         {isModalOpen && (
              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm p-6 shadow-2xl">
-                    <h3 className="text-xl font-serif text-white mb-4">Nova Lista</h3>
+                    <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-serif text-white">Nova Lista</h3><button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><X size={20}/></button></div>
                     <input className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white mb-4" placeholder="Nome da Lista" value={listNameInput} onChange={e => setListNameInput(e.target.value)} autoFocus />
                     <div className="flex gap-2">
                         <button onClick={() => setIsModalOpen(false)} className="flex-1 text-slate-400 hover:text-white py-2">Cancelar</button>
