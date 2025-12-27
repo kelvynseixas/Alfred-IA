@@ -183,7 +183,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactio
                         </button>
                         <div>
                             <h2 className="text-lg lg:text-xl font-bold text-white">
-                                {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, {user?.name.split(' ')[0]}.
+                                {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, {user?.name?.split(' ')[0] || 'Senhor'}.
                             </h2>
                             <p className="text-xs text-slate-400 hidden sm:block">Aqui está o panorama atual da sua propriedade.</p>
                         </div>
