@@ -78,11 +78,12 @@ const runMigrations = async () => {
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("Migration failed:", e);
+        // Re-throw the error to be caught by startServer
+        throw e;
     } finally {
         client.release();
     }
 };
-runMigrations().catch(err => console.error('Failed to run migrations on startup:', err));
 
 // --- AUTH MIDDLEWARE ---
 const authenticateToken = (req, res, next) => {
@@ -113,6 +114,7 @@ app.post('/api/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token });
     } catch (e) {
+        console.error("Login API Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -136,5 +138,25 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Alfred IA API running on port ${PORT}`));
+// --- SERVER STARTUP LOGIC ---
+const startServer = async () => {
+    try {
+        // 1. Run migrations to ensure DB schema is correct
+        await runMigrations();
+
+        // 2. Test database connection to ensure it's responsive
+        const client = await pool.connect();
+        console.log("Database connection test successful.");
+        client.release();
+
+        // 3. If all is well, start the Express server
+        const PORT = process.env.PORT || 3000;
+        app.listen(PORT, () => console.log(`Alfred IA API is online and running on port ${PORT}`));
+
+    } catch (error) {
+        console.error("FATAL: Failed to start server. Please check database connection and migrations.", error);
+        process.exit(1);
+    }
+};
+
+startServer();
