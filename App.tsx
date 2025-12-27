@@ -73,6 +73,7 @@ const App = () => {
       localStorage.removeItem('alfred_token');
       setIsAuthenticated(false);
       setUser(null);
+      setActiveView('landing');
   };
   
   const renderContent = () => {

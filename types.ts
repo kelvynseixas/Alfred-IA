@@ -2,7 +2,11 @@
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
+  INVESTMENT = 'INVESTMENT',
 }
+
+export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type DateRangeOption = '7D' | '15D' | '30D' | '60D' | 'CUSTOM';
 
 export enum AccountType {
   CHECKING = 'CHECKING',
@@ -34,6 +38,9 @@ export interface Transaction {
   date: string;
   accountId: string;
   cardId?: string;
+  recurrencePeriod?: RecurrencePeriod;
+  recurrenceInterval?: number;
+  recurrenceLimit?: number;
 }
 
 export interface CreditCard {
