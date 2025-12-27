@@ -1,6 +1,6 @@
 {
-  "name": "Alfred IA - Personal Butler",
-  "description": "A premium, omnichannel personal management system integrating Finance, Tasks, and Lists with a conversational AI interface.",
+  "name": "Alfred IA - Seu Mordomo Digital",
+  "description": "Um sistema de gestão pessoal de luxo e omnichannel, integrando Finanças, Tarefas e Listas com uma interface de IA conversacional.",
   "requestFramePermissions": [
     "microphone"
   ]

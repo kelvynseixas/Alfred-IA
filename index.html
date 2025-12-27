@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -5,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alfred IA</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
@@ -18,11 +19,12 @@
               slate: {
                 850: '#151f32',
                 900: '#0f172a',
+                950: '#020617',
               },
-              gold: {
-                400: '#fbbf24',
-                500: '#f59e0b',
-                600: '#d97706',
+              primary: {
+                DEFAULT: '#f59e0b', // Amber 500
+                'light': '#fbbf24', // Amber 400
+                'dark': '#d97706', // Amber 600
               }
             }
           },
@@ -66,7 +68,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- PONTO DE ENTRADA CRÍTICO PARA O VITE -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
