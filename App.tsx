@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { User, Transaction, Account } from './types';
 import { LoginPage } from './components/LoginPage';
@@ -31,6 +32,14 @@ const App = () => {
               body: JSON.stringify({ email, password: pass })
           });
 
+          // Se a resposta não for JSON válido, provavelmente é um erro de servidor (ex: proxy error)
+          const contentType = res.headers.get("content-type");
+          if (!contentType || !contentType.includes("application/json")) {
+               const text = await res.text();
+               console.error("Resposta não-JSON do servidor:", text);
+               return { success: false, error: 'Erro no servidor (500/502). Verifique os logs do backend.' };
+          }
+
           const data = await res.json();
 
           if (res.ok) {
@@ -39,12 +48,12 @@ const App = () => {
               setIsAuthenticated(true);
               return { success: true };
           } else {
-              // Retorna o erro exato do backend (ex: "Senha inválida", "Usuário não encontrado")
-              return { success: false, error: data.error || 'Falha na autenticação.' };
+              // Retorna o erro exato do backend
+              return { success: false, error: data.error || `Erro ${res.status}: Falha na autenticação.` };
           }
       } catch (error) {
-          console.error("Erro de conexão:", error);
-          return { success: false, error: 'Erro de conexão com o servidor. Verifique se o backend está rodando.' };
+          console.error("Erro de conexão no frontend:", error);
+          return { success: false, error: 'Servidor indisponível. Certifique-se de que "npm run server" ou o backend está rodando na porta 3000.' };
       }
   };
 
@@ -66,10 +75,9 @@ const App = () => {
             setTransactions(data.transactions || []);
             setAccounts(data.accounts || []);
         } else if (res.status === 401 || res.status === 403) {
-            // Token expirado ou inválido
             handleLogout();
         } else {
-            console.error("Erro ao buscar dados:", res.statusText);
+            console.error("Erro ao buscar dados:", res.status, res.statusText);
         }
     } catch (e) { 
         console.error("Erro de rede ao buscar dashboard:", e);
