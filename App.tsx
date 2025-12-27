@@ -1,22 +1,8 @@
-
 import * as React from 'react';
 import { User, Transaction, Account } from './types';
 import { LoginPage } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
-
-// MOCK DATA for fallback (Demo Mode)
-const MOCK_DATA = {
-    user: { id: '1', name: 'Admin User', email: 'admin@alfred.local', activeProfileId: '1', profiles: [] },
-    accounts: [{ id: '1', name: 'Carteira Principal', type: 'CHECKING', balance: 5430.50 }],
-    transactions: [
-        { id: '1', description: 'Supermercado', amount: 450.00, type: 'EXPENSE', category: 'Alimentação', date: new Date().toISOString(), accountId: '1' },
-        { id: '2', description: 'Salário', amount: 5000.00, type: 'INCOME', category: 'Trabalho', date: new Date().toISOString(), accountId: '1' },
-        { id: '3', description: 'Netflix', amount: 55.90, type: 'EXPENSE', category: 'Lazer', date: new Date().toISOString(), accountId: '1' },
-        { id: '4', description: 'Restaurante', amount: 120.00, type: 'EXPENSE', category: 'Lazer', date: new Date().toISOString(), accountId: '1' },
-        { id: '5', description: 'Combustível', amount: 250.00, type: 'EXPENSE', category: 'Transporte', date: new Date().toISOString(), accountId: '1' },
-    ]
-};
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = React.useState(!!localStorage.getItem('alfred_token'));
@@ -38,32 +24,28 @@ const App = () => {
   }, [isAuthenticated]);
 
   const handleLogin = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
-      // 1. Try Backend
       try {
           const res = await fetch('/api/auth/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, password: pass })
           });
+
+          const data = await res.json();
+
           if (res.ok) {
-              const { token } = await res.json();
+              const { token } = data;
               localStorage.setItem('alfred_token', token);
               setIsAuthenticated(true);
               return { success: true };
-          }
-          if (res.status === 401) {
-              return { success: false, error: 'Credenciais inválidas.' };
+          } else {
+              // Retorna o erro exato do backend (ex: "Senha inválida", "Usuário não encontrado")
+              return { success: false, error: data.error || 'Falha na autenticação.' };
           }
       } catch (error) {
-          console.warn("Backend unavailable, using mock login for demo.");
-          // Fallback for Demo purposes if backend is down
-          if (email === 'admin@alfred.local' && pass === 'alfred@1992') {
-             localStorage.setItem('alfred_token', 'mock-token');
-             setIsAuthenticated(true);
-             return { success: true };
-          }
+          console.error("Erro de conexão:", error);
+          return { success: false, error: 'Erro de conexão com o servidor. Verifique se o backend está rodando.' };
       }
-      return { success: false, error: 'Não foi possível conectar ao servidor (e credenciais de demo inválidas).' };
   };
 
   const fetchDashboardData = async () => {
@@ -74,15 +56,6 @@ const App = () => {
             return;
         }
 
-        // Check for mock token (Demo Mode)
-        if (token === 'mock-token') {
-             setUser(MOCK_DATA.user as any);
-             setTransactions(MOCK_DATA.transactions as any[]);
-             setAccounts(MOCK_DATA.accounts as any[]);
-             return;
-        }
-
-        // Real Fetch
         const res = await fetch('/api/data/dashboard', { 
             headers: { 'Authorization': `Bearer ${token}` } 
         });
@@ -93,11 +66,13 @@ const App = () => {
             setTransactions(data.transactions || []);
             setAccounts(data.accounts || []);
         } else if (res.status === 401 || res.status === 403) {
+            // Token expirado ou inválido
             handleLogout();
+        } else {
+            console.error("Erro ao buscar dados:", res.statusText);
         }
     } catch (e) { 
-        console.error("Error fetching data:", e);
-        // On error, also maybe fallback or just log
+        console.error("Erro de rede ao buscar dashboard:", e);
     }
   };
   
@@ -105,6 +80,8 @@ const App = () => {
       localStorage.removeItem('alfred_token');
       setIsAuthenticated(false);
       setUser(null);
+      setTransactions([]);
+      setAccounts([]);
       setActiveView('landing');
   };
   
