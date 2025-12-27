@@ -41,7 +41,7 @@ const App = () => {
     }
   }, [isAuthenticated]);
 
-  const handleLogin = async (email: string, pass: string): Promise<boolean> => {
+  const handleLogin = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
       try {
           const res = await fetch('/api/auth/login', {
               method: 'POST',
@@ -52,12 +52,13 @@ const App = () => {
               const { token } = await res.json();
               localStorage.setItem('alfred_token', token);
               setIsAuthenticated(true);
-              return true;
+              return { success: true };
           }
-          return false;
+          const errorData = await res.json();
+          return { success: false, error: errorData.error || 'Erro desconhecido.' };
       } catch (error) {
           console.error("Login failed:", error);
-          return false;
+          return { success: false, error: 'Não foi possível conectar ao servidor.' };
       }
   };
 

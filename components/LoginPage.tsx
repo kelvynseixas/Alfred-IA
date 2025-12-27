@@ -4,7 +4,7 @@ import { SubscriptionType, Plan } from '../types';
 import { Mail, Lock, User, Phone, ArrowRight, Bot, ShieldCheck, CreditCard, Loader2 } from 'lucide-react';
 
 interface LoginPageProps {
-  onLogin: (email: string, pass: string) => Promise<boolean>;
+  onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onRegister: (name: string, email: string, phone: string, sub: SubscriptionType) => void;
   plans: Plan[];
   isDarkMode: boolean;
@@ -32,9 +32,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, plans
       e.preventDefault();
       setIsLoading(true);
       setError('');
-      const success = await onLogin(email, password);
-      if (!success) {
-          setError('Credenciais inválidas. Verifique seu e-mail e senha.');
+      const result = await onLogin(email, password);
+      if (!result.success) {
+          setError(result.error || 'Ocorreu um erro desconhecido.');
       }
       setIsLoading(false);
   };

@@ -53,15 +53,18 @@ const runMigrations = async () => {
         await client.query(`CREATE TABLE IF NOT EXISTS announcements (id SERIAL PRIMARY KEY, title VARCHAR(255), message TEXT, date TIMESTAMPTZ DEFAULT NOW())`);
         await client.query(`CREATE TABLE IF NOT EXISTS system_configs (id INT PRIMARY KEY DEFAULT 1, config JSONB)`);
 
-        // Check if admin user exists, if not create one
-        const adminRes = await client.query("SELECT * FROM users WHERE email = 'maisalem.md@gmail.com'");
-        if (adminRes.rowCount === 0) {
-            const hashedPassword = await bcrypt.hash('Alfred@1992', 10);
-            await client.query(`
-                INSERT INTO users (name, email, password_hash, role, is_test_user, subscription) 
-                VALUES ('Admin', 'maisalem.md@gmail.com', $1, 'ADMIN', true, 'ANNUAL')`, [hashedPassword]);
-            console.log("Admin user created.");
-        }
+        // Ensure admin user exists and has correct credentials
+        const hashedPassword = await bcrypt.hash('Alfred@1992', 10);
+        await client.query(`
+            INSERT INTO users (name, email, password_hash, role, is_test_user, subscription)
+            VALUES ('Admin', 'maisalem.md@gmail.com', $1, 'ADMIN', true, 'ANNUAL')
+            ON CONFLICT (email) DO UPDATE
+            SET
+                password_hash = EXCLUDED.password_hash,
+                role = 'ADMIN',
+                name = 'Admin';
+        `);
+        console.log("Admin user provisioned/verified successfully.");
 
         await client.query('COMMIT');
         console.log("Migrations completed successfully.");
@@ -93,12 +96,12 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (result.rowCount === 0) {
-            return res.status(400).json({ error: 'Usuário não encontrado.' });
+            return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         const user = result.rows[0];
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
-            return res.status(400).json({ error: 'Senha inválida.' });
+            return res.status(401).json({ error: 'Senha inválida.' });
         }
         const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token });
