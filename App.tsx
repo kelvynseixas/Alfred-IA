@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
 import { 
   ModuleType, Transaction, Task, TaskStatus, ListGroup, User, FinancialProject, Account, Investment, Plan, Tutorial, Announcement
 } from './types';
@@ -18,24 +17,41 @@ import { LayoutDashboard, CheckSquare, List, LogOut, Target, Briefcase, Menu, X,
 export const ALFRED_ICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%230f172a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%231e293b;stop-opacity:1' /%3E%3C/linearGradient%E3%80%88/defs%3E%3Ccircle cx='100' cy='100' r='90' fill='url(%23grad1)' stroke='%23d97706' stroke-width='4'/%3E%3Cpath d='M65 80 Q 80 95 95 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M105 80 Q 120 95 135 80' stroke='%2338bdf8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Crect x='50' y='60' width='100' height='20' rx='5' fill='%2338bdf8' opacity='0.2'/%3E%3Cpath d='M100 130 Q 130 130 140 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 130 Q 70 130 60 110' stroke='%2338bdf8' stroke-width='2' fill='none' opacity='0.5'/%3E%3Cpath d='M100 150 L 100 170' stroke='%23d97706' stroke-width='6'/%3E%3Cpath d='M70 170 L 130 170 L 115 190 L 85 190 Z' fill='%23d97706'/%3E%3Cpath d='M90 170 L 90 180 L 110 180 L 110 170' fill='%230f172a'/%3E%3Ccircle cx='100' cy='100' r='95' stroke='%23d97706' stroke-width='2' fill='none' opacity='0.5'/%3E%3C/svg%3E";
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('alfred_token'));
-  const [activeModule, setActiveModule] = useState<ModuleType>(ModuleType.FINANCE);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [isAuthenticated, setIsAuthenticated] = React.useState(!!localStorage.getItem('alfred_token'));
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [activeModule, setActiveModule] = React.useState<ModuleType>(ModuleType.FINANCE);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [isChatOpen, setIsChatOpen] = React.useState(false);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   
   // App Data State
-  const [user, setUser] = useState<User | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [lists, setLists] = useState<ListGroup[]>([]);
-  const [projects, setProjects] = useState<FinancialProject[]>([]);
-  const [investments, setInvestments] = useState<Investment[]>([]);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [tutorials, setTutorials] = useState<Tutorial[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [user, setUser] = React.useState<User | null>(null);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [users, setUsers] = React.useState<User[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [accounts, setAccounts] = React.useState<Account[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [tasks, setTasks] = React.useState<Task[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [lists, setLists] = React.useState<ListGroup[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [projects, setProjects] = React.useState<FinancialProject[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [investments, setInvestments] = React.useState<Investment[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [plans, setPlans] = React.useState<Plan[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [tutorials, setTutorials] = React.useState<Tutorial[]>([]);
+  // FIX: Use React.useState to resolve "Cannot find name 'useState'" error.
+  const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
 
-  useEffect(() => {
+  // FIX: Use React.useEffect to resolve "Cannot find name 'useEffect'" error.
+  React.useEffect(() => {
     if (isAuthenticated) fetchDashboardData();
   }, [isAuthenticated]);
 
@@ -45,6 +61,7 @@ const App = () => {
         const data = await res.json();
         if (res.ok) {
             setUser(data.user || null);
+            setUsers(data.users || []);
             setTransactions(data.transactions || []);
             setAccounts(data.accounts || []);
             setTasks(data.tasks || []);
@@ -54,11 +71,16 @@ const App = () => {
             setPlans(data.plans || []);
             setTutorials(data.tutorials || []);
             setAnnouncements(data.announcements || []);
-            if (data.config?.aiKeys?.gemini) sessionStorage.setItem('VITE_GEMINI_KEY', data.config.aiKeys.gemini);
+            if (data.config?.aiKeys?.gemini) {
+                sessionStorage.setItem('VITE_GEMINI_KEY', data.config.aiKeys.gemini);
+            }
         } else {
             handleLogout();
         }
-    } catch (e) { console.error("Erro ao buscar dados:", e); }
+    } catch (e) { 
+        console.error("Erro ao buscar dados:", e);
+        handleLogout();
+    }
   };
 
   const handleAIAction = async (action: { type: string, payload: any }) => {
@@ -122,12 +144,12 @@ const App = () => {
            </div>
         </header>
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} accounts={accounts} projects={projects} onAddTransaction={()=>{}} onDeleteTransaction={()=>{}} onAddAccount={()=>{}} />}
-            {activeModule === ModuleType.INVESTMENTS && <InvestmentsModule investments={investments} onAddInvestment={()=>{}} onDeleteInvestment={()=>{}} />}
-            {activeModule === ModuleType.PROJECTS && <FinancialProjectsModule projects={projects} isDarkMode={true} onAddProject={()=>{}} onUpdateProject={()=>{}} onDeleteProject={()=>{}} />}
-            {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={()=>{}} onAddTask={()=>{}} onEditTask={()=>{}} onDeleteTask={()=>{}} />}
-            {activeModule === ModuleType.LISTS && <ListModule lists={lists} onAddItem={()=>{}} onAddList={()=>{}} onDeleteItem={()=>{}} onDeleteList={()=>{}} onEditList={()=>{}} onToggleItem={()=>{}} />}
-            {activeModule === ModuleType.ADMIN && <AdminPanel users={[]} plans={plans} isDarkMode={true} onAddUser={()=>{}} onManagePlan={()=>{}} onUpdateUser={()=>{}} onManageTutorial={()=>{}} onAddAnnouncement={()=>{}} />}
+            {activeModule === ModuleType.FINANCE && <FinancialModule transactions={transactions} accounts={accounts} projects={projects} onAddTransaction={fetchDashboardData} onDeleteTransaction={fetchDashboardData} onAddAccount={fetchDashboardData} />}
+            {activeModule === ModuleType.INVESTMENTS && <InvestmentsModule investments={investments} onAddInvestment={fetchDashboardData} onDeleteInvestment={fetchDashboardData} />}
+            {activeModule === ModuleType.PROJECTS && <FinancialProjectsModule projects={projects} isDarkMode={true} onAddProject={fetchDashboardData} onUpdateProject={fetchDashboardData} onDeleteProject={fetchDashboardData} />}
+            {activeModule === ModuleType.TASKS && <TaskModule tasks={tasks} onToggleStatus={fetchDashboardData} onAddTask={fetchDashboardData} onEditTask={fetchDashboardData} onDeleteTask={fetchDashboardData} />}
+            {activeModule === ModuleType.LISTS && <ListModule lists={lists} onAddItem={fetchDashboardData} onAddList={fetchDashboardData} onDeleteItem={fetchDashboardData} onDeleteList={fetchDashboardData} onEditList={fetchDashboardData} onToggleItem={fetchDashboardData} />}
+            {activeModule === ModuleType.ADMIN && user?.role === 'ADMIN' && <AdminPanel users={users} plans={plans} tutorials={tutorials} isDarkMode={true} onAddUser={fetchDashboardData} onManagePlan={fetchDashboardData} onUpdateUser={fetchDashboardData} onManageTutorial={fetchDashboardData} onAddAnnouncement={(ann) => setAnnouncements(prev => [...prev, ann])} />}
             {activeModule === ModuleType.PROFILE && user && <UserProfile user={user} plans={plans} isDarkMode={true} onUpdateUser={async (u) => { setUser(u); return true; }} />}
             {activeModule === ModuleType.TUTORIALS && <TutorialModule tutorials={tutorials} isDarkMode={true} />}
         </div>
