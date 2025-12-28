@@ -1,0 +1,11 @@
+
+[v1.0.1] - Atualização do Painel Financeiro
+- Adicionado histórico de versões.
+- Implementado filtro de período avançado (Hoje, Ontem, 7d, 15d, 30d, 60d, 90d, Personalizado).
+- Criado modal de lançamento com categorização automática baseada na descrição.
+- Adicionado seletor de recorrência complexa (Diário/Semanal/Mensal/Anual, Intervalo, Limite).
+- Adicionado Card de Investimento/Reserva.
+- Implementado visualização de detalhes (tabela) por tipo de card.
+- Criados 4 gráficos: Barra Comparativa e 3 Pizzas (Entrada, Saída, Investimento).
+- Histórico limitado às últimas 15 movimentações na tela principal.
+- Atualização do Schema do Banco de Dados para suportar recorrência.

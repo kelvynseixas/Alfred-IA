@@ -14,18 +14,15 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURAÇÃO DE BANCO DE DADOS ---
-// Prioriza as variáveis individuais fornecidas, com fallback para DATABASE_URL
 const dbConfig = {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASSWORD,
-    port: 5432, // Porta padrão do Postgres
-    // Se estiver em produção (Render/Heroku), usa SSL
+    port: 5432, 
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
 
-// Se não houver variáveis individuais, tenta usar a DATABASE_URL
 let poolConfig = dbConfig;
 if (!process.env.DB_USER && process.env.DATABASE_URL) {
     poolConfig = {
@@ -41,13 +38,12 @@ const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 const runMigrations = async () => {
     let client;
     try {
-        console.log(`🔄 Conectando ao banco '${process.env.DB_NAME || 'via URL'}' em '${process.env.DB_HOST || 'host'}'...`);
+        console.log(`🔄 Conectando ao banco '${process.env.DB_NAME || 'via URL'}'...`);
         client = await pool.connect();
         
         await client.query('BEGIN');
-        console.log("✅ Conexão estabelecida com sucesso.");
 
-        // Tabelas
+        // Tabelas Básicas
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -69,6 +65,7 @@ const runMigrations = async () => {
             );
         `);
 
+        // Tabela Transactions (Criação inicial)
         await client.query(`
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY,
@@ -81,8 +78,30 @@ const runMigrations = async () => {
                 date TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        // Migration para adicionar colunas de recorrência se não existirem
+        await client.query(`
+            DO $$ 
+            BEGIN 
+                BEGIN
+                    ALTER TABLE transactions ADD COLUMN recurrence_period VARCHAR(20) DEFAULT 'NONE';
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE transactions ADD COLUMN recurrence_interval INTEGER DEFAULT 1;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE transactions ADD COLUMN recurrence_limit INTEGER DEFAULT 0;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+            END $$;
+        `);
         
-        // Seed Admin User (Cria o usuário padrão se não existir)
+        // Seed Admin User
         const adminEmail = 'admin@alfred.local';
         const adminRes = await client.query("SELECT * FROM users WHERE email = $1", [adminEmail]);
         if (adminRes.rowCount === 0) {
@@ -90,23 +109,14 @@ const runMigrations = async () => {
             await client.query(`
                 INSERT INTO users (name, email, password_hash) 
                 VALUES ('Admin User', $1, $2)`, [adminEmail, hashedPassword]);
-            console.log("👤 Usuário Admin inicial criado: admin@alfred.local / alfred@1992");
+            console.log("👤 Usuário Admin inicial criado.");
         }
 
         await client.query('COMMIT');
         console.log("🚀 Sistema Alfred :: Banco de Dados Sincronizado.");
     } catch (e) {
         if (client) await client.query('ROLLBACK');
-        
-        console.error("\n❌ ERRO DE CONEXÃO COM O BANCO:");
-        if (e.code === '28P01') {
-            console.error(`🔒 Senha incorreta para o usuário '${process.env.DB_USER}'. Verifique o arquivo server/.env`);
-        } else if (e.code === '3D000') {
-            console.error(`🗄️ O banco de dados '${process.env.DB_NAME}' não existe.`);
-            console.error("👉 DICA: Crie o banco manualmente com o comando: CREATE DATABASE alfred_db;");
-        } else {
-            console.error(e.message);
-        }
+        console.error("❌ Erro no Banco:", e.message);
     } finally {
         if (client) client.release();
     }
@@ -125,40 +135,39 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// --- HEALTH CHECK ---
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'online', db_host: process.env.DB_HOST });
-});
-
-// --- AUTH ROUTES ---
+// --- ROUTES ---
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
         
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Usuário não encontrado.' });
-        }
         const user = result.rows[0];
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) {
-            return res.status(401).json({ error: 'Senha incorreta.' });
-        }
+        if (!await bcrypt.compare(password, user.password_hash)) return res.status(401).json({ error: 'Senha incorreta.' });
+        
         const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token });
     } catch (e) {
-        console.error("Login Error:", e.message);
-        res.status(500).json({ error: 'Erro interno no servidor.' });
+        res.status(500).json({ error: 'Erro interno.' });
     }
 });
 
-// --- PROTECTED DATA ROUTE ---
 app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
         const userRes = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [userId]);
         const accountsRes = await pool.query('SELECT * FROM accounts WHERE user_id = $1', [userId]);
-        const transactionsRes = await pool.query('SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC', [userId]);
+        // Busca transações incluindo colunas de recorrência
+        const transactionsRes = await pool.query(`
+            SELECT 
+                id, description, amount, type, category, date, account_id,
+                recurrence_period as "recurrencePeriod",
+                recurrence_interval as "recurrenceInterval",
+                recurrence_limit as "recurrenceLimit"
+            FROM transactions 
+            WHERE user_id = $1 
+            ORDER BY date DESC
+        `, [userId]);
         
         res.json({
             user: userRes.rows[0],
@@ -166,12 +175,11 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             transactions: transactionsRes.rows,
         });
     } catch (e) {
-        console.error("Dashboard Error:", e.message);
+        console.error(e);
         res.status(500).json({ error: 'Erro ao buscar dados.' });
     }
 });
 
-// --- SERVER STARTUP ---
 const startServer = async () => {
     await runMigrations();
     const PORT = process.env.PORT || 3000;
