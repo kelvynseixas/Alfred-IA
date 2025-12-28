@@ -1,6 +1,6 @@
 
 import * as React from 'react';
-import { User, Transaction, Account, Investment, Goal, Task } from './types';
+import { User, Transaction, Account, Investment, Goal, Task, ShoppingList } from './types';
 import { LoginPage } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -18,6 +18,7 @@ const App = () => {
   const [investments, setInvestments] = React.useState<Investment[]>([]);
   const [goals, setGoals] = React.useState<Goal[]>([]);
   const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [lists, setLists] = React.useState<ShoppingList[]>([]);
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -75,6 +76,7 @@ const App = () => {
             setInvestments(data.investments || []);
             setGoals(data.goals || []);
             setTasks(data.tasks || []);
+            setLists(data.lists || []);
         } else {
             // Se o token for inválido ou expirado (401/403), faz logout forçado
             if (res.status === 401 || res.status === 403) {
@@ -98,6 +100,7 @@ const App = () => {
       setInvestments([]);
       setGoals([]);
       setTasks([]);
+      setLists([]);
       setActiveView('landing');
   };
   
@@ -112,6 +115,7 @@ const App = () => {
                 investments={investments}
                 goals={goals}
                 tasks={tasks}
+                lists={lists}
                 onLogout={handleLogout} 
                 onRefreshData={fetchDashboardData} 
             />

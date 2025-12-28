@@ -1,4 +1,11 @@
 
+[v1.0.6] - Módulo de Listas e Integração Financeira
+- ADIÇÃO: Módulo de Listas (Suprimentos e Desejos) acessível via Sidebar.
+- ADIÇÃO: Tabelas `lists` e `list_items` no Banco de Dados.
+- ADIÇÃO: CRUD completo de Listas e Itens.
+- RECURSO: "Ponte Financeira" - Ao concluir um item na lista, o sistema sugere lançá-lo imediatamente como despesa no financeiro, preenchendo automaticamente a descrição.
+- MELHORIA: Refatoração do Dashboard para modularização.
+
 [v1.0.5] - Painel de Tarefas (To-Do)
 - ADIÇÃO: Módulo de Tarefas acessível via Sidebar.
 - ADIÇÃO: Tabela de Tarefas (Tasks) no Banco de Dados (PostgreSQL).

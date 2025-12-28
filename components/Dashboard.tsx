@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType, Goal, GoalEntry, Task, TaskPriority } from '../types';
+import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType, Goal, GoalEntry, Task, TaskPriority, ShoppingList } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, 
   PieChart, Pie, CartesianGrid, Legend, AreaChart, Area
@@ -10,8 +10,9 @@ import {
   Plus, ArrowUpCircle, ArrowDownCircle, MoreVertical, Bot, 
   Menu, X, Wallet, TrendingUp, TrendingDown, Calendar, Search, 
   CalendarRange, List, Trash2, Edit2, Repeat, Briefcase, Calculator, 
-  Flag, Trophy, History, Minus, CheckCircle, CheckSquare, Clock, AlertCircle
+  Flag, Trophy, History, Minus, CheckCircle, CheckSquare, Clock, AlertCircle, ShoppingCart
 } from 'lucide-react';
+import { ListModule } from './ListModule';
 
 interface DashboardProps {
     user: User | null;
@@ -29,11 +30,6 @@ const AXIS_COLOR = '#94a3b8';
 const formatCurrency = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatPercent = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1 });
 
-// Função auxiliar para comparar datas ignorando horário (Fix Timezone Issue)
-const isSameDay = (d1: Date, d2: Date) => {
-    return d1.toISOString().split('T')[0] === d2.toISOString().split('T')[0];
-};
-
 const autoCategorize = (description: string): string => {
     const d = description.toLowerCase();
     if (d.includes('uber') || d.includes('99') || d.includes('combustivel') || d.includes('posto')) return 'Transporte';
@@ -46,9 +42,9 @@ const autoCategorize = (description: string): string => {
     return ''; 
 };
 
-type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS' | 'TASKS';
+type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS' | 'TASKS' | 'LISTS';
 
-export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], goals?: Goal[], tasks?: Task[] }> = ({ user, accounts, transactions, investments = [], goals = [], tasks = [], onLogout, onRefreshData }) => {
+export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], goals?: Goal[], tasks?: Task[], lists?: ShoppingList[] }> = ({ user, accounts, transactions, investments = [], goals = [], tasks = [], lists = [], onLogout, onRefreshData }) => {
     
     // --- State Global ---
     const [activeView, setActiveView] = useState<ViewMode>('FINANCE');
@@ -278,11 +274,12 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
     };
 
     // Auxiliares de modal
-    const openAddModal = (type: TransactionType = TransactionType.EXPENSE) => {
+    const openAddModal = (data: Partial<typeof formData> = {}) => {
         setEditingId(null);
         setFormData({
-            description: '', amount: '', type, category: '', accountId: accounts[0]?.id || '', date: new Date().toISOString().split('T')[0],
-            recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: ''
+            description: '', amount: '', type: TransactionType.EXPENSE, category: '', accountId: accounts[0]?.id || '', date: new Date().toISOString().split('T')[0],
+            recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: '',
+            ...data
         });
         setIsTransactionModalOpen(true);
     };
@@ -345,6 +342,9 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                     <button onClick={() => setActiveView('TASKS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'TASKS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
                         <CheckSquare size={20} /> Tarefas
                     </button>
+                    <button onClick={() => setActiveView('LISTS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'LISTS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
+                        <ShoppingCart size={20} /> Listas de Suprimentos
+                    </button>
                 </nav>
                 <div className="p-4 border-t border-slate-800">
                     <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all">
@@ -358,7 +358,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                 <header className="h-auto min-h-[80px] border-b border-slate-800 bg-slate-950/95 backdrop-blur flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 z-20">
                     <div className="flex items-center gap-4 w-full md:w-auto">
                          <h2 className="text-xl font-bold text-white">
-                             {activeView === 'FINANCE' ? 'Gestão Financeira' : activeView === 'INVESTMENTS' ? 'Carteira de Ativos' : activeView === 'GOALS' ? 'Planejamento de Metas' : 'Gerenciador de Tarefas'}
+                             {activeView === 'FINANCE' ? 'Gestão Financeira' : activeView === 'INVESTMENTS' ? 'Carteira de Ativos' : activeView === 'GOALS' ? 'Planejamento de Metas' : activeView === 'TASKS' ? 'Gerenciador de Tarefas' : 'Listas de Suprimentos'}
                          </h2>
                     </div>
                     
@@ -668,6 +668,15 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                 </div>
                             </div>
                          </>
+                    )}
+
+                    {/* === VIEW: LISTAS === */}
+                    {activeView === 'LISTS' && (
+                        <ListModule 
+                            lists={lists} 
+                            onRefreshData={onRefreshData} 
+                            onOpenTransactionModal={openAddModal}
+                        />
                     )}
                 </div>
 

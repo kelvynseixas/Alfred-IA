@@ -142,6 +142,28 @@ const runMigrations = async () => {
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        // Tabelas de Listas
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS lists (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                type VARCHAR(50) DEFAULT 'SUPPLIES',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS list_items (
+                id SERIAL PRIMARY KEY,
+                list_id INTEGER REFERENCES lists(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                quantity INTEGER DEFAULT 1,
+                is_completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
         
         // Seed Admin User
         const adminEmail = 'admin@alfred.local';
@@ -246,6 +268,19 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             WHERE user_id = $1
             ORDER BY is_completed ASC, due_date ASC
         `, [userId]);
+
+        // Fetch Lists and Items
+        const listsRes = await pool.query(`SELECT id, name, type FROM lists WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        const lists = listsRes.rows;
+        
+        // Populate items for each list
+        for (let list of lists) {
+            const itemsRes = await pool.query(`
+                SELECT id, list_id as "listId", name, quantity, is_completed as "isCompleted" 
+                FROM list_items WHERE list_id = $1 ORDER BY is_completed ASC, created_at DESC
+            `, [list.id]);
+            list.items = itemsRes.rows;
+        }
         
         res.json({
             user: userRes.rows[0],
@@ -253,7 +288,8 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             transactions: transactionsRes.rows,
             investments: investmentsRes.rows,
             goals: goalsRes.rows,
-            tasks: tasksRes.rows
+            tasks: tasksRes.rows,
+            lists: lists
         });
     } catch (e) {
         console.error(e);
@@ -463,6 +499,87 @@ app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
         res.json({ message: 'Tarefa removida' });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao deletar tarefa' });
+    }
+});
+
+// --- LISTS CRUD ---
+app.post('/api/lists', authenticateToken, async (req, res) => {
+    const { name, type } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO lists (user_id, name, type) VALUES ($1, $2, $3)`,
+            [req.user.id, name, type]
+        );
+        res.status(201).json({ message: 'Lista criada' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao criar lista' });
+    }
+});
+
+app.delete('/api/lists/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM lists WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        res.json({ message: 'Lista removida' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar lista' });
+    }
+});
+
+app.post('/api/lists/:id/items', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { name, quantity } = req.body;
+    try {
+        // Verifica propriedade da lista
+        const listCheck = await pool.query('SELECT id FROM lists WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+        if (listCheck.rowCount === 0) return res.status(403).json({ error: 'Acesso negado' });
+
+        await pool.query(
+            `INSERT INTO list_items (list_id, name, quantity) VALUES ($1, $2, $3)`,
+            [id, name, quantity]
+        );
+        res.status(201).json({ message: 'Item adicionado' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao adicionar item' });
+    }
+});
+
+app.patch('/api/items/:id/toggle', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Verifica propriedade via join
+        const itemCheck = await pool.query(`
+            SELECT li.id FROM list_items li 
+            JOIN lists l ON li.list_id = l.id 
+            WHERE li.id = $1 AND l.user_id = $2
+        `, [id, req.user.id]);
+        
+        if (itemCheck.rowCount === 0) return res.status(403).json({ error: 'Acesso negado' });
+
+        await pool.query(
+            `UPDATE list_items SET is_completed = NOT is_completed WHERE id = $1`,
+            [id]
+        );
+        res.json({ message: 'Status do item alterado' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao alterar status do item' });
+    }
+});
+
+app.delete('/api/items/:id', authenticateToken, async (req, res) => {
+    try {
+         // Verifica propriedade via join
+         const itemCheck = await pool.query(`
+            SELECT li.id FROM list_items li 
+            JOIN lists l ON li.list_id = l.id 
+            WHERE li.id = $1 AND l.user_id = $2
+        `, [req.params.id, req.user.id]);
+        
+        if (itemCheck.rowCount === 0) return res.status(403).json({ error: 'Acesso negado' });
+
+        await pool.query('DELETE FROM list_items WHERE id = $1', [req.params.id]);
+        res.json({ message: 'Item removido' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar item' });
     }
 });
 

@@ -97,6 +97,27 @@ export interface Task {
   isCompleted: boolean;
 }
 
+// Novos Tipos para Listas
+export enum ListType {
+    SUPPLIES = 'SUPPLIES',
+    WISHES = 'WISHES'
+}
+
+export interface ListItem {
+    id: string;
+    listId: string;
+    name: string;
+    quantity: number;
+    isCompleted: boolean;
+}
+
+export interface ShoppingList {
+    id: string;
+    name: string;
+    type: ListType;
+    items?: ListItem[];
+}
+
 export interface CreditCard {
   id: string;
   name: string;
