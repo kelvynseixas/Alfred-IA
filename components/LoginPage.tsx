@@ -10,8 +10,9 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Pre-fill credentials for easy access
+  const [email, setEmail] = useState('admin@alfred.local');
+  const [password, setPassword] = useState('alfred@1992');
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -64,6 +65,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
             {!isLoading && <ArrowRight size={18} />}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+            <p className="text-xs text-slate-500 mb-1">Credenciais Padrão (Demo):</p>
+            <code className="text-xs bg-slate-800 px-2 py-1 rounded text-primary">admin@alfred.local</code>
+        </div>
 
         <div className="mt-8 pt-6 border-t border-slate-800 text-center">
             <a href="#" className="text-slate-400 hover:text-primary text-sm font-medium">

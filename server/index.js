@@ -5,39 +5,49 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-// Tenta carregar o .env do diretório atual
+
+// Carrega variáveis de ambiente
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- CONFIGURAÇÃO DE BANCO ---
-let pool;
-// Se não houver DATABASE_URL no .env, usamos um fallback, mas avisamos.
-if (!process.env.DATABASE_URL) {
-    console.warn('⚠️  AVISO: DATABASE_URL não encontrada no arquivo .env.');
-    console.warn('⚠️  Tentando conexão padrão: postgres://postgres:postgres@localhost:5432/alfred');
-    pool = new Pool({ connectionString: 'postgres://postgres:postgres@localhost:5432/alfred' });
-} else {
-    pool = new Pool({
+// --- CONFIGURAÇÃO DE BANCO DE DADOS ---
+// Prioriza as variáveis individuais fornecidas, com fallback para DATABASE_URL
+const dbConfig = {
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: 5432, // Porta padrão do Postgres
+    // Se estiver em produção (Render/Heroku), usa SSL
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+};
+
+// Se não houver variáveis individuais, tenta usar a DATABASE_URL
+let poolConfig = dbConfig;
+if (!process.env.DB_USER && process.env.DATABASE_URL) {
+    poolConfig = {
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    });
+    };
 }
 
-const SECRET_KEY = process.env.JWT_SECRET || 'fallback-secret-key-for-alfred-ia';
+const pool = new Pool(poolConfig);
+const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 
 // --- DATABASE MIGRATIONS E INICIALIZAÇÃO ---
 const runMigrations = async () => {
     let client;
     try {
-        console.log("🔄 Tentando conectar ao Banco de Dados...");
+        console.log(`🔄 Conectando ao banco '${process.env.DB_NAME || 'via URL'}' em '${process.env.DB_HOST || 'host'}'...`);
         client = await pool.connect();
         
         await client.query('BEGIN');
-        console.log("✅ Conexão bem sucedida. Verificando tabelas...");
+        console.log("✅ Conexão estabelecida com sucesso.");
 
+        // Tabelas
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -72,7 +82,7 @@ const runMigrations = async () => {
             );
         `);
         
-        // Seed Admin User
+        // Seed Admin User (Cria o usuário padrão se não existir)
         const adminEmail = 'admin@alfred.local';
         const adminRes = await client.query("SELECT * FROM users WHERE email = $1", [adminEmail]);
         if (adminRes.rowCount === 0) {
@@ -80,33 +90,23 @@ const runMigrations = async () => {
             await client.query(`
                 INSERT INTO users (name, email, password_hash) 
                 VALUES ('Admin User', $1, $2)`, [adminEmail, hashedPassword]);
-            console.log("👤 Usuário Admin criado: admin@alfred.local / alfred@1992");
+            console.log("👤 Usuário Admin inicial criado: admin@alfred.local / alfred@1992");
         }
 
         await client.query('COMMIT');
-        console.log("🚀 Sistema Alfred pronto para operação.");
+        console.log("🚀 Sistema Alfred :: Banco de Dados Sincronizado.");
     } catch (e) {
         if (client) await client.query('ROLLBACK');
         
-        // TRATAMENTO DE ERROS ESPECÍFICOS PARA AJUDAR O USUÁRIO
-        console.error("\n❌ ERRO CRÍTICO NO BANCO DE DADOS:");
-        
+        console.error("\n❌ ERRO DE CONEXÃO COM O BANCO:");
         if (e.code === '28P01') {
-            console.error("🔒 FALHA DE AUTENTICAÇÃO (Senha Incorreta)");
-            console.error("A senha do usuário 'postgres' está incorreta.");
-            console.error("👉 AÇÃO: Abra o arquivo 'server/.env' e coloque a senha correta do seu PostgreSQL em 'DATABASE_URL'.");
+            console.error(`🔒 Senha incorreta para o usuário '${process.env.DB_USER}'. Verifique o arquivo server/.env`);
         } else if (e.code === '3D000') {
-            console.error("🗄️ BANCO DE DADOS NÃO ENCONTRADO");
-            console.error("O banco de dados 'alfred' não existe no seu PostgreSQL.");
-            console.error("👉 AÇÃO: Abra seu terminal SQL ou PgAdmin e execute: CREATE DATABASE alfred;");
-        } else if (e.code === 'ECONNREFUSED') {
-            console.error("🔌 CONEXÃO RECUSADA");
-            console.error("Não foi possível conectar na porta 5432.");
-            console.error("👉 AÇÃO: Verifique se o PostgreSQL está rodando.");
+            console.error(`🗄️ O banco de dados '${process.env.DB_NAME}' não existe.`);
+            console.error("👉 DICA: Crie o banco manualmente com o comando: CREATE DATABASE alfred_db;");
         } else {
             console.error(e.message);
         }
-        console.error("\n"); // Espaço extra
     } finally {
         if (client) client.release();
     }
@@ -127,7 +127,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'online', db: process.env.DATABASE_URL ? 'configured' : 'fallback' });
+    res.json({ status: 'online', db_host: process.env.DB_HOST });
 });
 
 // --- AUTH ROUTES ---
@@ -148,7 +148,7 @@ app.post('/api/auth/login', async (req, res) => {
         res.json({ token });
     } catch (e) {
         console.error("Login Error:", e.message);
-        res.status(500).json({ error: 'Erro de conexão com o banco de dados. Verifique o terminal do servidor.' });
+        res.status(500).json({ error: 'Erro interno no servidor.' });
     }
 });
 
