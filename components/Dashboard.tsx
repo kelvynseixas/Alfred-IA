@@ -29,6 +29,11 @@ const AXIS_COLOR = '#94a3b8';
 const formatCurrency = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatPercent = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1 });
 
+// Função auxiliar para comparar datas ignorando horário (Fix Timezone Issue)
+const isSameDay = (d1: Date, d2: Date) => {
+    return d1.toISOString().split('T')[0] === d2.toISOString().split('T')[0];
+};
+
 const autoCategorize = (description: string): string => {
     const d = description.toLowerCase();
     if (d.includes('uber') || d.includes('99') || d.includes('combustivel') || d.includes('posto')) return 'Transporte';
@@ -87,18 +92,40 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
 
     // --- LÓGICA FINANCEIRA ---
     const filteredTransactions = useMemo(() => {
-        const now = new Date(); now.setHours(0,0,0,0);
+        const now = new Date(); 
+        // Normaliza 'now' para o início do dia local para comparação correta
+        // Para filtros relativos (30D), usamos timestamps
+        const nowTime = now.getTime();
+        const oneDay = 24 * 60 * 60 * 1000;
+
         return transactions.filter(t => {
-            const tDate = new Date(t.date); tDate.setHours(0,0,0,0);
+            // Conversão da data recebida (UTC) para objeto Date
+            // Para exibição correta, comparamos strings YYYY-MM-DD para evitar shift de timezone
+            const tDate = new Date(t.date); 
+            const tDateStr = t.date.split('T')[0]; // Pega YYYY-MM-DD do banco
+            const nowStr = now.toISOString().split('T')[0]; // Pega YYYY-MM-DD local (aproximado, ideal seria usar localDate)
+
             switch (dateRange) {
-                case 'TODAY': return tDate.getTime() === now.getTime();
-                case 'YESTERDAY': const yest = new Date(now); yest.setDate(yest.getDate() - 1); return tDate.getTime() === yest.getTime();
-                case '7D': { const cut = new Date(now); cut.setDate(cut.getDate() - 7); return tDate >= cut; }
-                case '15D': { const cut = new Date(now); cut.setDate(cut.getDate() - 15); return tDate >= cut; }
-                case '30D': { const cut = new Date(now); cut.setDate(cut.getDate() - 30); return tDate >= cut; }
-                case '60D': { const cut = new Date(now); cut.setDate(cut.getDate() - 60); return tDate >= cut; }
-                case '90D': { const cut = new Date(now); cut.setDate(cut.getDate() - 90); return tDate >= cut; }
-                case 'CUSTOM': if (!customStart || !customEnd) return true; return tDate >= new Date(customStart) && tDate <= new Date(customEnd);
+                case 'TODAY': 
+                    // Compara se a string de data do banco é igual a hoje (em UTC vs UTC ou Local vs Local)
+                    // Simplificação: Verifica se a data da transação é "Hoje" ou "Futuro próximo" (no mesmo dia)
+                    // Melhor abordagem: Verificar se a data é igual a data selecionada no form
+                    return tDateStr === new Date().toISOString().split('T')[0]; 
+                
+                case 'YESTERDAY':
+                    const yest = new Date(); yest.setDate(yest.getDate() - 1);
+                    return tDateStr === yest.toISOString().split('T')[0];
+                
+                case '7D': return (nowTime - tDate.getTime()) <= (7 * oneDay);
+                case '15D': return (nowTime - tDate.getTime()) <= (15 * oneDay);
+                case '30D': return (nowTime - tDate.getTime()) <= (30 * oneDay);
+                case '60D': return (nowTime - tDate.getTime()) <= (60 * oneDay);
+                case '90D': return (nowTime - tDate.getTime()) <= (90 * oneDay);
+                
+                case 'CUSTOM': 
+                    if (!customStart || !customEnd) return true;
+                    return tDateStr >= customStart && tDateStr <= customEnd;
+                
                 default: return true;
             }
         });
@@ -142,13 +169,41 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         e.preventDefault();
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
-        const payload = { ...formData, amount: parseFloat(formData.amount), recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 };
+        
+        // Garante que os números sejam números e não strings vazias
+        const amountFloat = parseFloat(formData.amount);
+        if (isNaN(amountFloat)) {
+            alert("Por favor, insira um valor válido.");
+            return;
+        }
+
+        const payload = { 
+            ...formData, 
+            amount: amountFloat, 
+            recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 
+        };
+        
         const url = editingId ? `/api/transactions/${editingId}` : '/api/transactions';
         const method = editingId ? 'PUT' : 'POST';
+        
         try {
-            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
-            onRefreshData(); setIsTransactionModalOpen(false);
-        } catch (error) { console.error(error); }
+            const res = await fetch(url, { 
+                method, 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
+                body: JSON.stringify(payload) 
+            });
+            
+            if (res.ok) {
+                await onRefreshData(); // Wait for refresh
+                setIsTransactionModalOpen(false);
+            } else {
+                const err = await res.json();
+                alert(`Erro ao salvar: ${err.error || 'Erro desconhecido'}`);
+            }
+        } catch (error) { 
+            console.error(error);
+            alert("Erro de conexão com o servidor.");
+        }
     };
 
     const handleDeleteTransaction = async (id: string) => {
@@ -170,12 +225,23 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         e.preventDefault();
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
-        const payload = { ...investFormData, amount: parseFloat(investFormData.amount), yieldRate: parseFloat(investFormData.yieldRate) };
+        
+        const payload = { 
+            ...investFormData, 
+            amount: parseFloat(investFormData.amount), 
+            yieldRate: parseFloat(investFormData.yieldRate) 
+        };
+        
         const url = editingInvestId ? `/api/investments/${editingInvestId}` : '/api/investments';
         const method = editingInvestId ? 'PUT' : 'POST';
         try {
-            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
-            onRefreshData(); setIsInvestModalOpen(false);
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            if (res.ok) {
+                await onRefreshData();
+                setIsInvestModalOpen(false);
+            } else {
+                 alert("Erro ao salvar investimento.");
+            }
         } catch (e) { console.error(e); }
     };
 
@@ -192,12 +258,18 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
         try {
-            await fetch('/api/goals', {
+            const res = await fetch('/api/goals', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(goalFormData)
             });
-            onRefreshData(); setIsGoalModalOpen(false); setGoalFormData({ name: '', targetAmount: '', deadline: '' });
+            if (res.ok) {
+                await onRefreshData(); 
+                setIsGoalModalOpen(false); 
+                setGoalFormData({ name: '', targetAmount: '', deadline: '' });
+            } else {
+                alert("Erro ao criar meta.");
+            }
         } catch (e) { console.error(e); }
     };
 
@@ -249,8 +321,11 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
 
     const openEditModal = (t: Transaction) => {
         setEditingId(t.id);
+        // Ajuste de data para o input (pegar apenas yyyy-mm-dd)
+        const dateStr = t.date.toString().split('T')[0];
+        
         setFormData({
-            description: t.description, amount: t.amount.toString(), type: t.type, category: t.category, accountId: t.accountId, date: new Date(t.date).toISOString().split('T')[0],
+            description: t.description, amount: t.amount.toString(), type: t.type, category: t.category, accountId: t.accountId, date: dateStr,
             recurrencePeriod: t.recurrencePeriod || 'NONE', recurrenceInterval: t.recurrenceInterval || 1, recurrenceLimit: t.recurrenceLimit ? t.recurrenceLimit.toString() : ''
         });
         setIsTransactionModalOpen(true);
@@ -399,7 +474,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                                 <div>
                                                     <p className="font-bold text-white text-sm">{t.description}</p>
                                                     <div className="flex gap-2 text-xs text-slate-500">
-                                                        <span>{new Date(t.date).toLocaleDateString('pt-BR')}</span>
+                                                        <span>{new Date(t.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
                                                         <span className="bg-slate-800 px-1 rounded">{t.category}</span>
                                                     </div>
                                                 </div>
@@ -515,7 +590,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                                     </div>
                                                 </div>
                                                 <h3 className="text-xl font-bold text-white mb-1">{goal.name}</h3>
-                                                <p className="text-slate-500 text-xs mb-4">Prazo: {new Date(goal.deadline).toLocaleDateString('pt-BR')}</p>
+                                                <p className="text-slate-500 text-xs mb-4">Prazo: {new Date(goal.deadline).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                                                 
                                                 <div className="flex justify-between items-end mb-2">
                                                     <span className="text-2xl font-bold text-emerald-400">{formatCurrency(Number(goal.currentAmount))}</span>
@@ -593,6 +668,31 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                         <option value="">Carteira Padrão</option>
                                         {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                                     </select>
+                                </div>
+                                <div className="p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
+                                    <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mb-2"><Repeat size={14} /> Recorrência</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <select className="bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white" value={formData.recurrencePeriod} onChange={e => setFormData({...formData, recurrencePeriod: e.target.value as RecurrencePeriod})}>
+                                            <option value="NONE">Não Repetir</option>
+                                            <option value="DAILY">Diário</option>
+                                            <option value="WEEKLY">Semanal</option>
+                                            <option value="MONTHLY">Mensal</option>
+                                            <option value="YEARLY">Anual</option>
+                                        </select>
+                                        {formData.recurrencePeriod !== 'NONE' && (
+                                            <div className="flex items-center gap-2">
+                                                <input type="number" min="1" className="w-12 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white text-center" value={formData.recurrenceInterval} onChange={e => setFormData({...formData, recurrenceInterval: parseInt(e.target.value)})} />
+                                                <span className="text-xs text-slate-500">{formData.recurrencePeriod === 'DAILY' ? 'dias' : formData.recurrencePeriod === 'WEEKLY' ? 'sem.' : formData.recurrencePeriod === 'MONTHLY' ? 'meses' : 'anos'}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {formData.recurrencePeriod !== 'NONE' && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <span className="text-xs text-slate-500">Encerrar após:</span>
+                                            <input type="number" placeholder="∞" className="w-16 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white text-center" value={formData.recurrenceLimit} onChange={e => setFormData({...formData, recurrenceLimit: e.target.value})} />
+                                            <span className="text-xs text-slate-500">vezes</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <button type="submit" className="w-full bg-primary hover:bg-primary-dark text-slate-900 font-bold py-3 rounded-lg transition-colors">{editingId ? 'Salvar Alterações' : 'Confirmar Lançamento'}</button>
                             </form>
@@ -679,7 +779,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                     <tbody className="divide-y divide-slate-800">
                                         {goalHistory.map(entry => (
                                             <tr key={entry.id}>
-                                                <td className="px-4 py-3">{new Date(entry.date).toLocaleDateString('pt-BR')} {new Date(entry.date).toLocaleTimeString('pt-BR')}</td>
+                                                <td className="px-4 py-3">{new Date(entry.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} {new Date(entry.date).toLocaleTimeString('pt-BR')}</td>
                                                 <td className={`px-4 py-3 text-right font-bold ${entry.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                                     {entry.amount > 0 ? '+' : ''}{formatCurrency(Number(entry.amount))}
                                                 </td>

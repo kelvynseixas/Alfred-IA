@@ -14,7 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURAÇÃO DE BANCO DE DADOS ---
-const dbConfig = {
+// Usa estritamente as variáveis de ambiente fornecidas
+const poolConfig = {
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
@@ -23,14 +24,6 @@ const dbConfig = {
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
 
-let poolConfig = dbConfig;
-if (!process.env.DB_USER && process.env.DATABASE_URL) {
-    poolConfig = {
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    };
-}
-
 const pool = new Pool(poolConfig);
 const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 
@@ -38,7 +31,7 @@ const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 const runMigrations = async () => {
     let client;
     try {
-        console.log(`🔄 Conectando ao banco '${process.env.DB_NAME || 'via URL'}'...`);
+        console.log(`🔄 Conectando ao banco '${process.env.DB_NAME}' em '${process.env.DB_HOST}'...`);
         client = await pool.connect();
         
         await client.query('BEGIN');
@@ -141,10 +134,17 @@ const runMigrations = async () => {
         const adminRes = await client.query("SELECT * FROM users WHERE email = $1", [adminEmail]);
         if (adminRes.rowCount === 0) {
             const hashedPassword = await bcrypt.hash('alfred@1992', 10);
-            await client.query(`
+            const userInsert = await client.query(`
                 INSERT INTO users (name, email, password_hash) 
-                VALUES ('Admin User', $1, $2)`, [adminEmail, hashedPassword]);
-            console.log("👤 Usuário Admin inicial criado.");
+                VALUES ('Admin User', $1, $2) RETURNING id`, [adminEmail, hashedPassword]);
+            
+            // Create Default Account for transactions without account_id
+            await client.query(`
+                INSERT INTO accounts (user_id, name, type, balance, color)
+                VALUES ($1, 'Carteira Principal', 'WALLET', 0, '#f59e0b')
+            `, [userInsert.rows[0].id]);
+            
+            console.log("👤 Usuário Admin inicial criado com Carteira Principal.");
         }
 
         await client.query('COMMIT');
@@ -242,15 +242,18 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
 app.post('/api/transactions', authenticateToken, async (req, res) => {
     const { description, amount, type, category, date, accountId, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
     try {
+        // Ensure accountId is null if empty string
+        const safeAccountId = (accountId && accountId !== "") ? accountId : null;
+        
         await pool.query(
             `INSERT INTO transactions (user_id, description, amount, type, category, date, account_id, recurrence_period, recurrence_interval, recurrence_limit)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [req.user.id, description, amount, type, category, date, accountId || null, recurrencePeriod, recurrenceInterval, recurrenceLimit]
+            [req.user.id, description, amount, type, category, date, safeAccountId, recurrencePeriod, recurrenceInterval, recurrenceLimit]
         );
         res.status(201).json({ message: 'Criado com sucesso' });
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Erro ao salvar transação' });
+        console.error("Erro insert transação:", e);
+        res.status(500).json({ error: 'Erro ao salvar transação: ' + e.message });
     }
 });
 
@@ -258,10 +261,12 @@ app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { description, amount, type, category, date, accountId, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
     try {
+        const safeAccountId = (accountId && accountId !== "") ? accountId : null;
+
         await pool.query(
             `UPDATE transactions SET description=$1, amount=$2, type=$3, category=$4, date=$5, account_id=$6, recurrence_period=$7, recurrence_interval=$8, recurrence_limit=$9
              WHERE id=$10 AND user_id=$11`,
-            [description, amount, type, category, date, accountId || null, recurrencePeriod, recurrenceInterval, recurrenceLimit, id, req.user.id]
+            [description, amount, type, category, date, safeAccountId, recurrencePeriod, recurrenceInterval, recurrenceLimit, id, req.user.id]
         );
         res.json({ message: 'Atualizado com sucesso' });
     } catch (e) {
@@ -289,8 +294,8 @@ app.post('/api/investments', authenticateToken, async (req, res) => {
         );
         res.status(201).json({ message: 'Investimento criado' });
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Erro ao salvar investimento' });
+        console.error("Erro insert investimento:", e);
+        res.status(500).json({ error: 'Erro ao salvar investimento: ' + e.message });
     }
 });
 
@@ -328,8 +333,8 @@ app.post('/api/goals', authenticateToken, async (req, res) => {
         );
         res.status(201).json({ message: 'Meta criada' });
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Erro ao criar meta' });
+        console.error("Erro insert meta:", e);
+        res.status(500).json({ error: 'Erro ao criar meta: ' + e.message });
     }
 });
 

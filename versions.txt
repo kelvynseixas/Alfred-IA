@@ -1,4 +1,10 @@
 
+[v1.0.4] - Correções de Ambiente e Visualização
+- CORREÇÃO: Arquivo .env do servidor forçado com as credenciais corretas fornecidas pelo usuário.
+- CORREÇÃO: Lógica de filtro de data no Dashboard ajustada para evitar o problema de fuso horário onde lançamentos de "Hoje" apareciam como "Ontem" ou sumiam.
+- CORREÇÃO: Tratamento reforçado de tipos numéricos no Backend para evitar erros de inserção no PostgreSQL.
+- MELHORIA: Feedback visual (alert) mais detalhado em caso de falha ao salvar.
+
 [v1.0.3] - Painel de Metas e Objetivos
 - ADIÇÃO: Módulo de Metas acessível via Sidebar.
 - ADIÇÃO: Tabela de Metas (Goals) e Histórico de Metas (Goal Entries) no Banco de Dados.
