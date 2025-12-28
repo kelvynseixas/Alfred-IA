@@ -1,4 +1,12 @@
 
+[v1.0.2] - Correção de Persistência e Módulo de Investimentos
+- CORREÇÃO CRÍTICA: Implementada conexão real (API POST/PUT/DELETE) para movimentações financeiras. Antes os dados não persistiam.
+- ADIÇÃO: Painel de Investimentos dedicado (acessível via Sidebar).
+- ADIÇÃO: Tabela de Investimentos no Banco de Dados (PostgreSQL).
+- ADIÇÃO: Formulário de Investimentos (Nome, Tipo, Rentabilidade %, Resgate).
+- ADIÇÃO: Algoritmo de projeção de rentabilidade (1 mês, 6 meses, 12 meses).
+- ADIÇÃO: Cards de KPIs de Investimento (Total Investido, Rentabilidade Média).
+
 [v1.0.1] - Atualização do Painel Financeiro
 - Adicionado histórico de versões.
 - Implementado filtro de período avançado (Hoje, Ontem, 7d, 15d, 30d, 60d, 90d, Personalizado).

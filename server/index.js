@@ -65,7 +65,7 @@ const runMigrations = async () => {
             );
         `);
 
-        // Tabela Transactions (Criação inicial)
+        // Tabela Transactions
         await client.query(`
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY,
@@ -99,6 +99,20 @@ const runMigrations = async () => {
                     WHEN duplicate_column THEN NULL;
                 END;
             END $$;
+        `);
+
+        // Tabela Investments (NOVA)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS investments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                amount NUMERIC NOT NULL,
+                yield_rate NUMERIC DEFAULT 0,
+                redemption_terms VARCHAR(255),
+                start_date TIMESTAMPTZ DEFAULT NOW()
+            );
         `);
         
         // Seed Admin User
@@ -136,6 +150,8 @@ const authenticateToken = (req, res, next) => {
 };
 
 // --- ROUTES ---
+
+// Auth
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -152,12 +168,12 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// Dashboard Data (Aggregated)
 app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
         const userRes = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [userId]);
         const accountsRes = await pool.query('SELECT * FROM accounts WHERE user_id = $1', [userId]);
-        // Busca transações incluindo colunas de recorrência
         const transactionsRes = await pool.query(`
             SELECT 
                 id, description, amount, type, category, date, account_id,
@@ -169,16 +185,109 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             ORDER BY date DESC
         `, [userId]);
         
+        const investmentsRes = await pool.query(`
+            SELECT 
+                id, name, type, amount, 
+                yield_rate as "yieldRate", 
+                redemption_terms as "redemptionTerms",
+                start_date as "startDate"
+            FROM investments
+            WHERE user_id = $1
+            ORDER BY start_date DESC
+        `, [userId]);
+        
         res.json({
             user: userRes.rows[0],
             accounts: accountsRes.rows,
             transactions: transactionsRes.rows,
+            investments: investmentsRes.rows
         });
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Erro ao buscar dados.' });
     }
 });
+
+// --- TRANSACTION CRUD ---
+app.post('/api/transactions', authenticateToken, async (req, res) => {
+    const { description, amount, type, category, date, accountId, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO transactions (user_id, description, amount, type, category, date, account_id, recurrence_period, recurrence_interval, recurrence_limit)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [req.user.id, description, amount, type, category, date, accountId || null, recurrencePeriod, recurrenceInterval, recurrenceLimit]
+        );
+        res.status(201).json({ message: 'Criado com sucesso' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Erro ao salvar transação' });
+    }
+});
+
+app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { description, amount, type, category, date, accountId, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
+    try {
+        await pool.query(
+            `UPDATE transactions SET description=$1, amount=$2, type=$3, category=$4, date=$5, account_id=$6, recurrence_period=$7, recurrence_interval=$8, recurrence_limit=$9
+             WHERE id=$10 AND user_id=$11`,
+            [description, amount, type, category, date, accountId || null, recurrencePeriod, recurrenceInterval, recurrenceLimit, id, req.user.id]
+        );
+        res.json({ message: 'Atualizado com sucesso' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao atualizar' });
+    }
+});
+
+app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM transactions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        res.json({ message: 'Deletado com sucesso' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar' });
+    }
+});
+
+// --- INVESTMENT CRUD ---
+app.post('/api/investments', authenticateToken, async (req, res) => {
+    const { name, type, amount, yieldRate, redemptionTerms, startDate } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO investments (user_id, name, type, amount, yield_rate, redemption_terms, start_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [req.user.id, name, type, amount, yieldRate, redemptionTerms, startDate]
+        );
+        res.status(201).json({ message: 'Investimento criado' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Erro ao salvar investimento' });
+    }
+});
+
+app.put('/api/investments/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { name, type, amount, yieldRate, redemptionTerms, startDate } = req.body;
+    try {
+        await pool.query(
+            `UPDATE investments SET name=$1, type=$2, amount=$3, yield_rate=$4, redemption_terms=$5, start_date=$6
+             WHERE id=$7 AND user_id=$8`,
+            [name, type, amount, yieldRate, redemptionTerms, startDate, id, req.user.id]
+        );
+        res.json({ message: 'Investimento atualizado' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao atualizar investimento' });
+    }
+});
+
+app.delete('/api/investments/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM investments WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        res.json({ message: 'Investimento removido' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar investimento' });
+    }
+});
+
 
 const startServer = async () => {
     await runMigrations();

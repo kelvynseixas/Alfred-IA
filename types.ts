@@ -44,6 +44,27 @@ export interface Transaction {
   recurrenceLimit?: number;
 }
 
+// Novos Tipos para Investimentos
+export enum InvestmentType {
+  CDB = 'CDB',
+  TESOURO = 'TESOURO',
+  ACOES = 'ACOES',
+  FII = 'FII',
+  CRYPTO = 'CRYPTO',
+  POUPANCA = 'POUPANCA',
+  OUTRO = 'OUTRO'
+}
+
+export interface Investment {
+  id: string;
+  name: string;
+  type: InvestmentType;
+  amount: number;
+  yieldRate: number; // Porcentagem anual
+  redemptionTerms: string; // Ex: D+1, No Vencimento
+  startDate: string;
+}
+
 export interface CreditCard {
   id: string;
   name: string;
