@@ -65,13 +65,11 @@ export interface Investment {
   startDate: string;
 }
 
-export interface CreditCard {
+// Novos Tipos para Metas
+export interface GoalEntry {
   id: string;
-  name: string;
-  limit: number;
-  availableLimit: number;
-  closingDay: number;
-  dueDay: number;
+  amount: number; // Pode ser positivo ou negativo
+  date: string;
 }
 
 export interface Goal {
@@ -79,6 +77,17 @@ export interface Goal {
   name: string;
   targetAmount: number;
   currentAmount: number;
+  deadline: string;
+  entries?: GoalEntry[]; // Histórico opcional ao carregar lista
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  limit: number;
+  availableLimit: number;
+  closingDay: number;
+  dueDay: number;
 }
 
 export interface FinancialProfile {

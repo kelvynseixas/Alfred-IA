@@ -1,6 +1,6 @@
 
 import * as React from 'react';
-import { User, Transaction, Account, Investment } from './types';
+import { User, Transaction, Account, Investment, Goal } from './types';
 import { LoginPage } from './components/LoginPage';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -16,6 +16,7 @@ const App = () => {
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [accounts, setAccounts] = React.useState<Account[]>([]);
   const [investments, setInvestments] = React.useState<Investment[]>([]);
+  const [goals, setGoals] = React.useState<Goal[]>([]);
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -71,6 +72,7 @@ const App = () => {
             setTransactions(data.transactions || []);
             setAccounts(data.accounts || []);
             setInvestments(data.investments || []);
+            setGoals(data.goals || []);
         } else {
             // Se o token for inválido ou expirado (401/403), faz logout forçado
             if (res.status === 401 || res.status === 403) {
@@ -92,6 +94,7 @@ const App = () => {
       setTransactions([]);
       setAccounts([]);
       setInvestments([]);
+      setGoals([]);
       setActiveView('landing');
   };
   
@@ -104,6 +107,7 @@ const App = () => {
                 accounts={accounts} 
                 transactions={transactions}
                 investments={investments}
+                goals={goals}
                 onLogout={handleLogout} 
                 onRefreshData={fetchDashboardData} 
             />

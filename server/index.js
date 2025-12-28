@@ -101,7 +101,7 @@ const runMigrations = async () => {
             END $$;
         `);
 
-        // Tabela Investments (NOVA)
+        // Tabela Investments
         await client.query(`
             CREATE TABLE IF NOT EXISTS investments (
                 id SERIAL PRIMARY KEY,
@@ -112,6 +112,27 @@ const runMigrations = async () => {
                 yield_rate NUMERIC DEFAULT 0,
                 redemption_terms VARCHAR(255),
                 start_date TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+
+        // Tabelas de Metas (Goals)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS goals (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                target_amount NUMERIC NOT NULL,
+                current_amount NUMERIC DEFAULT 0,
+                deadline DATE
+            );
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS goal_entries (
+                id SERIAL PRIMARY KEY,
+                goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+                amount NUMERIC NOT NULL,
+                date TIMESTAMPTZ DEFAULT NOW()
             );
         `);
         
@@ -195,12 +216,21 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             WHERE user_id = $1
             ORDER BY start_date DESC
         `, [userId]);
+
+        const goalsRes = await pool.query(`
+            SELECT 
+                id, name, target_amount as "targetAmount", current_amount as "currentAmount", deadline
+            FROM goals
+            WHERE user_id = $1
+            ORDER BY deadline ASC
+        `, [userId]);
         
         res.json({
             user: userRes.rows[0],
             accounts: accountsRes.rows,
             transactions: transactionsRes.rows,
-            investments: investmentsRes.rows
+            investments: investmentsRes.rows,
+            goals: goalsRes.rows
         });
     } catch (e) {
         console.error(e);
@@ -285,6 +315,73 @@ app.delete('/api/investments/:id', authenticateToken, async (req, res) => {
         res.json({ message: 'Investimento removido' });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao deletar investimento' });
+    }
+});
+
+// --- GOALS CRUD ---
+app.post('/api/goals', authenticateToken, async (req, res) => {
+    const { name, targetAmount, deadline } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO goals (user_id, name, target_amount, deadline) VALUES ($1, $2, $3, $4)`,
+            [req.user.id, name, targetAmount, deadline]
+        );
+        res.status(201).json({ message: 'Meta criada' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Erro ao criar meta' });
+    }
+});
+
+app.post('/api/goals/:id/entry', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { amount } = req.body; // Positive to add, negative to remove
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        // Update current amount
+        await client.query(`
+            UPDATE goals SET current_amount = current_amount + $1 
+            WHERE id = $2 AND user_id = $3
+        `, [amount, id, req.user.id]);
+
+        // Log entry
+        await client.query(`
+            INSERT INTO goal_entries (goal_id, amount) VALUES ($1, $2)
+        `, [id, amount]);
+
+        await client.query('COMMIT');
+        res.json({ message: 'Saldo atualizado' });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error(e);
+        res.status(500).json({ error: 'Erro ao atualizar saldo da meta' });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/api/goals/:id/entries', authenticateToken, async (req, res) => {
+    try {
+        // Verifica propriedade
+        const goalCheck = await pool.query('SELECT id FROM goals WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        if (goalCheck.rowCount === 0) return res.status(403).json({ error: 'Acesso negado' });
+
+        const entries = await pool.query(`SELECT * FROM goal_entries WHERE goal_id = $1 ORDER BY date DESC`, [req.params.id]);
+        res.json(entries.rows);
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao buscar histórico' });
+    }
+});
+
+app.delete('/api/goals/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM goals WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        res.json({ message: 'Meta removida' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar meta' });
     }
 });
 

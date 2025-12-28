@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType } from '../types';
+import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType, Goal, GoalEntry } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, 
   PieChart, Pie, CartesianGrid, Legend, AreaChart, Area
@@ -9,7 +9,8 @@ import {
   LayoutDashboard, ArrowRightLeft, CreditCard, Target, LogOut, 
   Plus, ArrowUpCircle, ArrowDownCircle, MoreVertical, Bot, 
   Menu, X, Wallet, TrendingUp, TrendingDown, Calendar, Search, 
-  CalendarRange, List, Trash2, Edit2, Repeat, Briefcase, Calculator
+  CalendarRange, List, Trash2, Edit2, Repeat, Briefcase, Calculator, 
+  Flag, Trophy, History, Minus, CheckCircle
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -26,7 +27,7 @@ const COLORS_INVEST = ['#f59e0b', '#fbbf24', '#d97706', '#fcd34d', '#78350f'];
 const AXIS_COLOR = '#94a3b8';
 
 const formatCurrency = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const formatPercent = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 });
+const formatPercent = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1 });
 
 const autoCategorize = (description: string): string => {
     const d = description.toLowerCase();
@@ -40,9 +41,9 @@ const autoCategorize = (description: string): string => {
     return ''; 
 };
 
-type ViewMode = 'FINANCE' | 'INVESTMENTS';
+type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS';
 
-export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }> = ({ user, accounts, transactions, investments = [], onLogout, onRefreshData }) => {
+export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], goals?: Goal[] }> = ({ user, accounts, transactions, investments = [], goals = [], onLogout, onRefreshData }) => {
     
     // --- State Global ---
     const [activeView, setActiveView] = useState<ViewMode>('FINANCE');
@@ -73,6 +74,17 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
         name: '', type: InvestmentType.CDB, amount: '', yieldRate: '', redemptionTerms: 'No Vencimento', startDate: new Date().toISOString().split('T')[0]
     });
 
+    // --- State Metas ---
+    const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+    const [goalFormData, setGoalFormData] = useState<{ name: string; targetAmount: string; deadline: string }>({
+        name: '', targetAmount: '', deadline: ''
+    });
+    // Gerenciamento de saldo da meta nos cards
+    const [goalValues, setGoalValues] = useState<Record<string, string>>({}); 
+    // Histórico de meta
+    const [viewGoalHistoryId, setViewGoalHistoryId] = useState<string | null>(null);
+    const [goalHistory, setGoalHistory] = useState<GoalEntry[]>([]);
+
     // --- LÓGICA FINANCEIRA ---
     const filteredTransactions = useMemo(() => {
         const now = new Date(); now.setHours(0,0,0,0);
@@ -97,67 +109,10 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
     const totalExpense = filteredTransactions.filter(t => t.type === TransactionType.EXPENSE).reduce((acc, t) => acc + Number(t.amount), 0);
     const totalInvestedFlow = filteredTransactions.filter(t => t.type === TransactionType.INVESTMENT).reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // --- ACTIONS FINANCEIRO ---
-    const openAddModal = (type: TransactionType = TransactionType.EXPENSE) => {
-        setEditingId(null);
-        setFormData({
-            description: '', amount: '', type, category: '', accountId: accounts[0]?.id || '', date: new Date().toISOString().split('T')[0],
-            recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: ''
-        });
-        setIsTransactionModalOpen(true);
-    };
-
-    const openEditModal = (t: Transaction) => {
-        setEditingId(t.id);
-        setFormData({
-            description: t.description, amount: t.amount.toString(), type: t.type, category: t.category, accountId: t.accountId, date: new Date(t.date).toISOString().split('T')[0],
-            recurrencePeriod: t.recurrencePeriod || 'NONE', recurrenceInterval: t.recurrenceInterval || 1, recurrenceLimit: t.recurrenceLimit ? t.recurrenceLimit.toString() : ''
-        });
-        setIsTransactionModalOpen(true);
-    };
-
-    const handleSubmitTransaction = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const token = localStorage.getItem('alfred_token');
-        if (!token) return;
-
-        const payload = { ...formData, amount: parseFloat(formData.amount), recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 };
-        const url = editingId ? `/api/transactions/${editingId}` : '/api/transactions';
-        const method = editingId ? 'PUT' : 'POST';
-
-        try {
-            const res = await fetch(url, {
-                method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                onRefreshData();
-                setIsTransactionModalOpen(false);
-            } else {
-                alert("Erro ao salvar.");
-            }
-        } catch (error) { console.error(error); }
-    };
-
-    const handleDeleteTransaction = async (id: string) => {
-        if (!confirm("Excluir movimentação?")) return;
-        const token = localStorage.getItem('alfred_token');
-        await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-        onRefreshData();
-    };
-
-    const handleDescriptionBlur = () => {
-        if (!formData.category && formData.description) {
-            const auto = autoCategorize(formData.description);
-            if (auto) setFormData(prev => ({ ...prev, category: auto }));
-        }
-    };
-
     // --- LÓGICA INVESTIMENTOS ---
     const totalInvestmentsAssets = investments.reduce((acc, curr) => acc + Number(curr.amount), 0);
     const avgYield = investments.length > 0 ? investments.reduce((acc, curr) => acc + Number(curr.yieldRate), 0) / investments.length : 0;
     
-    // Projeção Simples (Juros Compostos Mensais aproximados)
     const projectionData = useMemo(() => {
         const today = new Date();
         const months = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -177,46 +132,139 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
         });
     }, [investments]);
 
-    const openInvestModal = (inv?: Investment) => {
-        if (inv) {
-            setEditingInvestId(inv.id);
-            setInvestFormData({
-                name: inv.name, type: inv.type, amount: inv.amount.toString(), yieldRate: inv.yieldRate.toString(),
-                redemptionTerms: inv.redemptionTerms, startDate: new Date(inv.startDate).toISOString().split('T')[0]
-            });
-        } else {
-            setEditingInvestId(null);
-            setInvestFormData({
-                name: '', type: InvestmentType.CDB, amount: '', yieldRate: '', redemptionTerms: 'No Vencimento', startDate: new Date().toISOString().split('T')[0]
-            });
-        }
-        setIsInvestModalOpen(true);
+    // --- LÓGICA METAS ---
+    const totalGoalsTarget = goals.reduce((acc, g) => acc + Number(g.targetAmount), 0);
+    const totalGoalsCurrent = goals.reduce((acc, g) => acc + Number(g.currentAmount), 0);
+    const overallGoalProgress = totalGoalsTarget > 0 ? (totalGoalsCurrent / totalGoalsTarget) : 0;
+
+    // --- HANDLERS FINANCEIRO ---
+    const handleSubmitTransaction = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const token = localStorage.getItem('alfred_token');
+        if (!token) return;
+        const payload = { ...formData, amount: parseFloat(formData.amount), recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 };
+        const url = editingId ? `/api/transactions/${editingId}` : '/api/transactions';
+        const method = editingId ? 'PUT' : 'POST';
+        try {
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            onRefreshData(); setIsTransactionModalOpen(false);
+        } catch (error) { console.error(error); }
     };
 
+    const handleDeleteTransaction = async (id: string) => {
+        if (!confirm("Excluir movimentação?")) return;
+        const token = localStorage.getItem('alfred_token');
+        await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        onRefreshData();
+    };
+
+    const handleDescriptionBlur = () => {
+        if (!formData.category && formData.description) {
+            const auto = autoCategorize(formData.description);
+            if (auto) setFormData(prev => ({ ...prev, category: auto }));
+        }
+    };
+
+    // --- HANDLERS INVESTIMENTO ---
     const handleSubmitInvest = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
-        
         const payload = { ...investFormData, amount: parseFloat(investFormData.amount), yieldRate: parseFloat(investFormData.yieldRate) };
         const url = editingInvestId ? `/api/investments/${editingInvestId}` : '/api/investments';
         const method = editingInvestId ? 'PUT' : 'POST';
-
         try {
-            await fetch(url, {
-                method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(payload)
-            });
-            onRefreshData();
-            setIsInvestModalOpen(false);
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            onRefreshData(); setIsInvestModalOpen(false);
         } catch (e) { console.error(e); }
     };
 
     const handleDeleteInvest = async (id: string) => {
-        if (!confirm("Remover este investimento da carteira?")) return;
+        if (!confirm("Remover este investimento?")) return;
         const token = localStorage.getItem('alfred_token');
         await fetch(`/api/investments/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
         onRefreshData();
+    };
+
+    // --- HANDLERS METAS ---
+    const handleCreateGoal = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const token = localStorage.getItem('alfred_token');
+        if (!token) return;
+        try {
+            await fetch('/api/goals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(goalFormData)
+            });
+            onRefreshData(); setIsGoalModalOpen(false); setGoalFormData({ name: '', targetAmount: '', deadline: '' });
+        } catch (e) { console.error(e); }
+    };
+
+    const handleDeleteGoal = async (id: string) => {
+        if (!confirm("Tem certeza que deseja desistir desta meta?")) return;
+        const token = localStorage.getItem('alfred_token');
+        await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        onRefreshData();
+    };
+
+    const handleUpdateGoalBalance = async (id: string, isAddition: boolean) => {
+        const valStr = goalValues[id];
+        if (!valStr || isNaN(Number(valStr)) || Number(valStr) <= 0) return;
+        
+        const amount = isAddition ? parseFloat(valStr) : -parseFloat(valStr);
+        const token = localStorage.getItem('alfred_token');
+        try {
+            await fetch(`/api/goals/${id}/entry`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ amount })
+            });
+            setGoalValues(prev => ({ ...prev, [id]: '' })); // Limpa input
+            onRefreshData();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleViewGoalHistory = async (id: string) => {
+        setViewGoalHistoryId(id);
+        const token = localStorage.getItem('alfred_token');
+        try {
+            const res = await fetch(`/api/goals/${id}/entries`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                setGoalHistory(data);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    // Auxiliares de modal
+    const openAddModal = (type: TransactionType = TransactionType.EXPENSE) => {
+        setEditingId(null);
+        setFormData({
+            description: '', amount: '', type, category: '', accountId: accounts[0]?.id || '', date: new Date().toISOString().split('T')[0],
+            recurrencePeriod: 'NONE', recurrenceInterval: 1, recurrenceLimit: ''
+        });
+        setIsTransactionModalOpen(true);
+    };
+
+    const openEditModal = (t: Transaction) => {
+        setEditingId(t.id);
+        setFormData({
+            description: t.description, amount: t.amount.toString(), type: t.type, category: t.category, accountId: t.accountId, date: new Date(t.date).toISOString().split('T')[0],
+            recurrencePeriod: t.recurrencePeriod || 'NONE', recurrenceInterval: t.recurrenceInterval || 1, recurrenceLimit: t.recurrenceLimit ? t.recurrenceLimit.toString() : ''
+        });
+        setIsTransactionModalOpen(true);
+    };
+
+    const openInvestModal = (inv?: Investment) => {
+        if (inv) {
+            setEditingInvestId(inv.id);
+            setInvestFormData({ name: inv.name, type: inv.type, amount: inv.amount.toString(), yieldRate: inv.yieldRate.toString(), redemptionTerms: inv.redemptionTerms, startDate: new Date(inv.startDate).toISOString().split('T')[0] });
+        } else {
+            setEditingInvestId(null);
+            setInvestFormData({ name: '', type: InvestmentType.CDB, amount: '', yieldRate: '', redemptionTerms: 'No Vencimento', startDate: new Date().toISOString().split('T')[0] });
+        }
+        setIsInvestModalOpen(true);
     };
 
     return (
@@ -239,6 +287,9 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                     <button onClick={() => setActiveView('INVESTMENTS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'INVESTMENTS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
                         <Briefcase size={20} /> Carteira Investimentos
                     </button>
+                    <button onClick={() => setActiveView('GOALS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'GOALS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
+                        <Flag size={20} /> Metas e Objetivos
+                    </button>
                 </nav>
                 <div className="p-4 border-t border-slate-800">
                     <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all">
@@ -251,10 +302,12 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                 {/* --- HEADER --- */}
                 <header className="h-auto min-h-[80px] border-b border-slate-800 bg-slate-950/95 backdrop-blur flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 z-20">
                     <div className="flex items-center gap-4 w-full md:w-auto">
-                         <h2 className="text-xl font-bold text-white">{activeView === 'FINANCE' ? 'Gestão Financeira' : 'Carteira de Ativos'}</h2>
+                         <h2 className="text-xl font-bold text-white">
+                             {activeView === 'FINANCE' ? 'Gestão Financeira' : activeView === 'INVESTMENTS' ? 'Carteira de Ativos' : 'Planejamento de Metas'}
+                         </h2>
                     </div>
                     
-                    {activeView === 'FINANCE' ? (
+                    {activeView === 'FINANCE' && (
                         <>
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto bg-slate-900 p-1.5 rounded-lg border border-slate-800">
                                 <CalendarRange size={16} className="text-slate-400 ml-2" />
@@ -283,9 +336,15 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                                 <Plus size={18} /> Novo Registro
                             </button>
                         </>
-                    ) : (
+                    )}
+                    {activeView === 'INVESTMENTS' && (
                         <button onClick={() => openInvestModal()} className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95 whitespace-nowrap">
                             <Plus size={18} /> Novo Ativo
+                        </button>
+                    )}
+                    {activeView === 'GOALS' && (
+                        <button onClick={() => setIsGoalModalOpen(true)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95 whitespace-nowrap">
+                            <Plus size={18} /> Nova Meta
                         </button>
                     )}
                 </header>
@@ -316,7 +375,6 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                                             <YAxis dataKey="name" type="category" stroke={AXIS_COLOR} width={80} tick={{fill: 'white', fontSize: 12}} />
                                             <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff'}} formatter={(val: number) => formatCurrency(val)} />
                                             <Bar dataKey="value" barSize={40} radius={[0, 4, 4, 0]}>
-                                                {/* <Cell key="income" fill="#10b981" /> */}
                                             </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
@@ -366,21 +424,8 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                     {activeView === 'INVESTMENTS' && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center gap-4 relative overflow-hidden">
-                                    <div className="p-4 bg-emerald-500/20 rounded-full text-emerald-500"><Wallet size={32} /></div>
-                                    <div>
-                                        <p className="text-slate-500 text-sm font-medium">Patrimônio Investido</p>
-                                        <h3 className="text-3xl font-bold text-white">{formatCurrency(totalInvestmentsAssets)}</h3>
-                                    </div>
-                                    <div className="absolute -right-4 -bottom-4 opacity-5"><Wallet size={100} /></div>
-                                </div>
-                                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center gap-4 relative overflow-hidden">
-                                    <div className="p-4 bg-blue-500/20 rounded-full text-blue-500"><TrendingUp size={32} /></div>
-                                    <div>
-                                        <p className="text-slate-500 text-sm font-medium">Rentabilidade Média (a.a)</p>
-                                        <h3 className="text-3xl font-bold text-white">{formatPercent(avgYield / 100)}</h3>
-                                    </div>
-                                </div>
+                                <StatCard title="Patrimônio Investido" value={formatCurrency(totalInvestmentsAssets)} icon={<Wallet size={24} className="text-emerald-500" />} colorClass="bg-emerald-500 text-emerald-500" />
+                                <StatCard title="Rentabilidade Média" value={formatPercent(avgYield / 100)} icon={<TrendingUp size={24} className="text-blue-500" />} colorClass="bg-blue-500 text-blue-500" />
                                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center gap-4 relative overflow-hidden">
                                     <div className="p-4 bg-amber-500/20 rounded-full text-amber-500"><Calculator size={32} /></div>
                                     <div>
@@ -391,7 +436,6 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Lista de Ativos */}
                                 <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
                                     <div className="p-6 border-b border-slate-800 flex justify-between items-center">
                                         <h3 className="font-bold text-white">Carteira de Ativos</h3>
@@ -428,7 +472,6 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                                     </div>
                                 </div>
 
-                                {/* Gráfico de Projeção */}
                                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-96">
                                     <h3 className="font-bold text-white mb-4">Projeção de Rendimento</h3>
                                     <ResponsiveContainer width="100%" height="100%">
@@ -444,11 +487,86 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                             </div>
                         </>
                     )}
+
+                    {/* === VIEW: METAS (GOALS) === */}
+                    {activeView === 'GOALS' && (
+                        <>
+                            {/* Resumo */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <StatCard title="Metas Ativas" value={goals.length.toString()} icon={<Flag size={24} className="text-purple-400" />} colorClass="bg-purple-500 text-purple-400" />
+                                <StatCard title="Total Alvo" value={formatCurrency(totalGoalsTarget)} icon={<Target size={24} className="text-slate-400" />} colorClass="bg-slate-500 text-slate-400" />
+                                <StatCard title="Total Acumulado" value={formatCurrency(totalGoalsCurrent)} icon={<CheckCircle size={24} className="text-emerald-400" />} colorClass="bg-emerald-500 text-emerald-400" />
+                                <StatCard title="Progresso Geral" value={formatPercent(overallGoalProgress)} icon={<Trophy size={24} className="text-amber-400" />} colorClass="bg-amber-500 text-amber-400" />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                {goals.map(goal => {
+                                    const progress = Math.min(Number(goal.currentAmount) / Number(goal.targetAmount), 1);
+                                    return (
+                                        <div key={goal.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-blue-500/20 rounded-xl text-blue-400">
+                                                        <Trophy size={24} />
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => handleViewGoalHistory(goal.id)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Histórico"><History size={16} /></button>
+                                                        <button onClick={() => handleDeleteGoal(goal.id)} className="p-2 bg-slate-800 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>
+                                                    </div>
+                                                </div>
+                                                <h3 className="text-xl font-bold text-white mb-1">{goal.name}</h3>
+                                                <p className="text-slate-500 text-xs mb-4">Prazo: {new Date(goal.deadline).toLocaleDateString('pt-BR')}</p>
+                                                
+                                                <div className="flex justify-between items-end mb-2">
+                                                    <span className="text-2xl font-bold text-emerald-400">{formatCurrency(Number(goal.currentAmount))}</span>
+                                                    <span className="text-sm text-slate-500">de {formatCurrency(Number(goal.targetAmount))}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 rounded-full h-2 mb-6">
+                                                    <div className="bg-emerald-500 h-2 rounded-full transition-all duration-1000" style={{ width: `${progress * 100}%` }}></div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 mt-auto">
+                                                <label className="text-xs text-slate-500 font-bold uppercase mb-2 block">Atualizar Saldo</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="number" 
+                                                        className="flex-1 bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                                                        placeholder="0,00"
+                                                        value={goalValues[goal.id] || ''}
+                                                        onChange={(e) => setGoalValues(prev => ({ ...prev, [goal.id]: e.target.value }))}
+                                                    />
+                                                    <button 
+                                                        onClick={() => handleUpdateGoalBalance(goal.id, false)}
+                                                        className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-500 rounded transition-colors"
+                                                    >
+                                                        <Minus size={18} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleUpdateGoalBalance(goal.id, true)}
+                                                        className="p-2 bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-500 rounded transition-colors"
+                                                    >
+                                                        <Plus size={18} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {goals.length === 0 && (
+                                    <div className="col-span-full py-12 text-center text-slate-500 bg-slate-900/50 border border-slate-800 border-dashed rounded-2xl">
+                                        <Flag size={48} className="mx-auto mb-4 opacity-50" />
+                                        <p>Nenhuma meta definida. Comece a planejar seus sonhos!</p>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* --- MODAIS --- */}
                 
-                {/* Modal Movimentação (Entrada/Saída/Investimento Fluxo) */}
+                {/* Modal Movimentação */}
                 {isTransactionModalOpen && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                         <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
@@ -464,57 +582,17 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                                         </button>
                                     ))}
                                 </div>
-                                <div>
-                                    <label className="text-xs text-slate-500 uppercase font-bold">Descrição</label>
-                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-primary focus:outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} onBlur={handleDescriptionBlur} placeholder="Ex: Salário, Uber..." required />
+                                <div><input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} onBlur={handleDescriptionBlur} placeholder="Descrição" required /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} required placeholder="Valor" />
+                                    <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Valor (R$)</label>
-                                        <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-primary focus:outline-none" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} required />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Data</label>
-                                        <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-primary focus:outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Categoria</label>
-                                        <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-primary focus:outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} placeholder="Automático" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Conta</label>
-                                        <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-primary focus:outline-none" value={formData.accountId} onChange={e => setFormData({...formData, accountId: e.target.value})}>
-                                            <option value="">Carteira Padrão</option>
-                                            {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-slate-800/50 border border-slate-700 rounded-lg">
-                                    <label className="flex items-center gap-2 text-xs font-bold text-slate-300 mb-2"><Repeat size={14} /> Recorrência</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <select className="bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white" value={formData.recurrencePeriod} onChange={e => setFormData({...formData, recurrencePeriod: e.target.value as RecurrencePeriod})}>
-                                            <option value="NONE">Não Repetir</option>
-                                            <option value="DAILY">Diário</option>
-                                            <option value="WEEKLY">Semanal</option>
-                                            <option value="MONTHLY">Mensal</option>
-                                            <option value="YEARLY">Anual</option>
-                                        </select>
-                                        {formData.recurrencePeriod !== 'NONE' && (
-                                            <div className="flex items-center gap-2">
-                                                <input type="number" min="1" className="w-12 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white text-center" value={formData.recurrenceInterval} onChange={e => setFormData({...formData, recurrenceInterval: parseInt(e.target.value)})} />
-                                                <span className="text-xs text-slate-500">{formData.recurrencePeriod === 'DAILY' ? 'dias' : formData.recurrencePeriod === 'WEEKLY' ? 'sem.' : formData.recurrencePeriod === 'MONTHLY' ? 'meses' : 'anos'}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {formData.recurrencePeriod !== 'NONE' && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                            <span className="text-xs text-slate-500">Encerrar após:</span>
-                                            <input type="number" placeholder="∞" className="w-16 bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white text-center" value={formData.recurrenceLimit} onChange={e => setFormData({...formData, recurrenceLimit: e.target.value})} />
-                                            <span className="text-xs text-slate-500">vezes</span>
-                                        </div>
-                                    )}
+                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} placeholder="Categoria" />
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.accountId} onChange={e => setFormData({...formData, accountId: e.target.value})}>
+                                        <option value="">Carteira Padrão</option>
+                                        {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                                    </select>
                                 </div>
                                 <button type="submit" className="w-full bg-primary hover:bg-primary-dark text-slate-900 font-bold py-3 rounded-lg transition-colors">{editingId ? 'Salvar Alterações' : 'Confirmar Lançamento'}</button>
                             </form>
@@ -522,7 +600,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                     </div>
                 )}
 
-                {/* Modal Investimento (Ativo) */}
+                {/* Modal Investimento */}
                 {isInvestModalOpen && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
                         <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 shadow-2xl">
@@ -531,44 +609,86 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
                                 <button onClick={() => setIsInvestModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
                             </div>
                             <form onSubmit={handleSubmitInvest} className="space-y-4">
-                                <div>
-                                    <label className="text-xs text-slate-500 uppercase font-bold">Nome do Ativo</label>
-                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.name} onChange={e => setInvestFormData({...investFormData, name: e.target.value})} placeholder="Ex: Tesouro Selic 2029" required />
+                                <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.name} onChange={e => setInvestFormData({...investFormData, name: e.target.value})} placeholder="Nome do Ativo" required />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.type} onChange={e => setInvestFormData({...investFormData, type: e.target.value as InvestmentType})}>
+                                        <option value="CDB">CDB</option>
+                                        <option value="TESOURO">Tesouro Direto</option>
+                                        <option value="ACOES">Ações</option>
+                                        <option value="FII">FIIs</option>
+                                        <option value="CRYPTO">Criptomoedas</option>
+                                        <option value="POUPANCA">Poupança</option>
+                                        <option value="OUTRO">Outro</option>
+                                    </select>
+                                    <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.amount} onChange={e => setInvestFormData({...investFormData, amount: e.target.value})} required placeholder="Valor" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Tipo</label>
-                                        <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.type} onChange={e => setInvestFormData({...investFormData, type: e.target.value as InvestmentType})}>
-                                            <option value="CDB">CDB</option>
-                                            <option value="TESOURO">Tesouro Direto</option>
-                                            <option value="ACOES">Ações</option>
-                                            <option value="FII">FIIs</option>
-                                            <option value="CRYPTO">Criptomoedas</option>
-                                            <option value="POUPANCA">Poupança</option>
-                                            <option value="OUTRO">Outro</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Valor Investido (R$)</label>
-                                        <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.amount} onChange={e => setInvestFormData({...investFormData, amount: e.target.value})} required />
-                                    </div>
+                                    <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.yieldRate} onChange={e => setInvestFormData({...investFormData, yieldRate: e.target.value})} placeholder="Rentabilidade %" />
+                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.redemptionTerms} onChange={e => setInvestFormData({...investFormData, redemptionTerms: e.target.value})} placeholder="Resgate" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                     <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Rentabilidade (% a.a)</label>
-                                        <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.yieldRate} onChange={e => setInvestFormData({...investFormData, yieldRate: e.target.value})} placeholder="Ex: 12.5" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Resgate</label>
-                                        <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.redemptionTerms} onChange={e => setInvestFormData({...investFormData, redemptionTerms: e.target.value})} placeholder="Ex: D+1, 2029..." />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-slate-500 uppercase font-bold">Data de Início</label>
-                                    <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-emerald-500 focus:outline-none" value={investFormData.startDate} onChange={e => setInvestFormData({...investFormData, startDate: e.target.value})} />
-                                </div>
+                                <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" value={investFormData.startDate} onChange={e => setInvestFormData({...investFormData, startDate: e.target.value})} />
                                 <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-bold py-3 rounded-lg transition-colors">{editingInvestId ? 'Salvar Alterações' : 'Adicionar Ativo à Carteira'}</button>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Nova Meta */}
+                {isGoalModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
+                             <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-white">Nova Meta</h3>
+                                <button onClick={() => setIsGoalModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                            </div>
+                            <form onSubmit={handleCreateGoal} className="space-y-4">
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold">Nome da Meta</label>
+                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none" value={goalFormData.name} onChange={e => setGoalFormData({...goalFormData, name: e.target.value})} placeholder="Ex: Viagem Europa" required />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold">Valor Alvo (R$)</label>
+                                    <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none" value={goalFormData.targetAmount} onChange={e => setGoalFormData({...goalFormData, targetAmount: e.target.value})} required />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold">Prazo</label>
+                                    <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none" value={goalFormData.deadline} onChange={e => setGoalFormData({...goalFormData, deadline: e.target.value})} required />
+                                </div>
+                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Criar Meta</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Histórico Meta */}
+                {viewGoalHistoryId && (
+                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 shadow-2xl h-[60vh] flex flex-col">
+                             <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-4">
+                                <h3 className="text-xl font-bold text-white">Histórico de Movimentações</h3>
+                                <button onClick={() => setViewGoalHistoryId(null)}><X className="text-slate-400 hover:text-white" /></button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                <table className="w-full text-left text-sm text-slate-400">
+                                    <thead className="bg-slate-800 text-slate-200 uppercase text-xs sticky top-0">
+                                        <tr>
+                                            <th className="px-4 py-2">Data</th>
+                                            <th className="px-4 py-2 text-right">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {goalHistory.map(entry => (
+                                            <tr key={entry.id}>
+                                                <td className="px-4 py-3">{new Date(entry.date).toLocaleDateString('pt-BR')} {new Date(entry.date).toLocaleTimeString('pt-BR')}</td>
+                                                <td className={`px-4 py-3 text-right font-bold ${entry.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {entry.amount > 0 ? '+' : ''}{formatCurrency(Number(entry.amount))}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {goalHistory.length === 0 && <tr><td colSpan={2} className="p-4 text-center">Nenhum registro encontrado.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -577,7 +697,6 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[] }
     );
 };
 
-// Subcomponente simples para Card (para evitar repetição e limpar código principal)
 const StatCard = ({ title, value, icon, colorClass, onClick }: any) => (
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl relative overflow-hidden group flex flex-col justify-between h-40">
         <div className="flex justify-between items-start">
