@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType, Goal, GoalEntry } from '../types';
+import { User, Transaction, Account, TransactionType, DateRangeOption, RecurrencePeriod, Investment, InvestmentType, Goal, GoalEntry, Task, TaskPriority } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, 
   PieChart, Pie, CartesianGrid, Legend, AreaChart, Area
@@ -10,7 +10,7 @@ import {
   Plus, ArrowUpCircle, ArrowDownCircle, MoreVertical, Bot, 
   Menu, X, Wallet, TrendingUp, TrendingDown, Calendar, Search, 
   CalendarRange, List, Trash2, Edit2, Repeat, Briefcase, Calculator, 
-  Flag, Trophy, History, Minus, CheckCircle
+  Flag, Trophy, History, Minus, CheckCircle, CheckSquare, Clock, AlertCircle
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -46,9 +46,9 @@ const autoCategorize = (description: string): string => {
     return ''; 
 };
 
-type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS';
+type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS' | 'TASKS';
 
-export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], goals?: Goal[] }> = ({ user, accounts, transactions, investments = [], goals = [], onLogout, onRefreshData }) => {
+export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], goals?: Goal[], tasks?: Task[] }> = ({ user, accounts, transactions, investments = [], goals = [], tasks = [], onLogout, onRefreshData }) => {
     
     // --- State Global ---
     const [activeView, setActiveView] = useState<ViewMode>('FINANCE');
@@ -84,48 +84,39 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
     const [goalFormData, setGoalFormData] = useState<{ name: string; targetAmount: string; deadline: string }>({
         name: '', targetAmount: '', deadline: ''
     });
-    // Gerenciamento de saldo da meta nos cards
     const [goalValues, setGoalValues] = useState<Record<string, string>>({}); 
-    // Histórico de meta
     const [viewGoalHistoryId, setViewGoalHistoryId] = useState<string | null>(null);
     const [goalHistory, setGoalHistory] = useState<GoalEntry[]>([]);
+
+    // --- State Tarefas ---
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [taskFormData, setTaskFormData] = useState<{
+        description: string; dueDate: string; priority: TaskPriority; recurrence: RecurrencePeriod;
+    }>({
+        description: '', dueDate: new Date().toISOString().split('T')[0], priority: TaskPriority.MEDIUM, recurrence: 'NONE'
+    });
 
     // --- LÓGICA FINANCEIRA ---
     const filteredTransactions = useMemo(() => {
         const now = new Date(); 
-        // Normaliza 'now' para o início do dia local para comparação correta
-        // Para filtros relativos (30D), usamos timestamps
         const nowTime = now.getTime();
         const oneDay = 24 * 60 * 60 * 1000;
 
         return transactions.filter(t => {
-            // Conversão da data recebida (UTC) para objeto Date
-            // Para exibição correta, comparamos strings YYYY-MM-DD para evitar shift de timezone
             const tDate = new Date(t.date); 
-            const tDateStr = t.date.split('T')[0]; // Pega YYYY-MM-DD do banco
-            const nowStr = now.toISOString().split('T')[0]; // Pega YYYY-MM-DD local (aproximado, ideal seria usar localDate)
+            const tDateStr = t.date.split('T')[0]; 
+            const nowStr = now.toISOString().split('T')[0];
 
             switch (dateRange) {
-                case 'TODAY': 
-                    // Compara se a string de data do banco é igual a hoje (em UTC vs UTC ou Local vs Local)
-                    // Simplificação: Verifica se a data da transação é "Hoje" ou "Futuro próximo" (no mesmo dia)
-                    // Melhor abordagem: Verificar se a data é igual a data selecionada no form
-                    return tDateStr === new Date().toISOString().split('T')[0]; 
-                
-                case 'YESTERDAY':
-                    const yest = new Date(); yest.setDate(yest.getDate() - 1);
-                    return tDateStr === yest.toISOString().split('T')[0];
-                
+                case 'TODAY': return tDateStr === new Date().toISOString().split('T')[0]; 
+                case 'YESTERDAY': const yest = new Date(); yest.setDate(yest.getDate() - 1); return tDateStr === yest.toISOString().split('T')[0];
                 case '7D': return (nowTime - tDate.getTime()) <= (7 * oneDay);
                 case '15D': return (nowTime - tDate.getTime()) <= (15 * oneDay);
                 case '30D': return (nowTime - tDate.getTime()) <= (30 * oneDay);
                 case '60D': return (nowTime - tDate.getTime()) <= (60 * oneDay);
                 case '90D': return (nowTime - tDate.getTime()) <= (90 * oneDay);
-                
-                case 'CUSTOM': 
-                    if (!customStart || !customEnd) return true;
-                    return tDateStr >= customStart && tDateStr <= customEnd;
-                
+                case 'CUSTOM': if (!customStart || !customEnd) return true; return tDateStr >= customStart && tDateStr <= customEnd;
                 default: return true;
             }
         });
@@ -164,46 +155,25 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
     const totalGoalsCurrent = goals.reduce((acc, g) => acc + Number(g.currentAmount), 0);
     const overallGoalProgress = totalGoalsTarget > 0 ? (totalGoalsCurrent / totalGoalsTarget) : 0;
 
+    // --- LÓGICA TAREFAS ---
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.isCompleted).length;
+    const pendingTasks = tasks.filter(t => !t.isCompleted).length;
+
     // --- HANDLERS FINANCEIRO ---
     const handleSubmitTransaction = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
-        
-        // Garante que os números sejam números e não strings vazias
         const amountFloat = parseFloat(formData.amount);
-        if (isNaN(amountFloat)) {
-            alert("Por favor, insira um valor válido.");
-            return;
-        }
-
-        const payload = { 
-            ...formData, 
-            amount: amountFloat, 
-            recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 
-        };
-        
+        if (isNaN(amountFloat)) { alert("Por favor, insira um valor válido."); return; }
+        const payload = { ...formData, amount: amountFloat, recurrenceLimit: formData.recurrenceLimit ? parseInt(formData.recurrenceLimit) : 0 };
         const url = editingId ? `/api/transactions/${editingId}` : '/api/transactions';
         const method = editingId ? 'PUT' : 'POST';
-        
         try {
-            const res = await fetch(url, { 
-                method, 
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
-                body: JSON.stringify(payload) 
-            });
-            
-            if (res.ok) {
-                await onRefreshData(); // Wait for refresh
-                setIsTransactionModalOpen(false);
-            } else {
-                const err = await res.json();
-                alert(`Erro ao salvar: ${err.error || 'Erro desconhecido'}`);
-            }
-        } catch (error) { 
-            console.error(error);
-            alert("Erro de conexão com o servidor.");
-        }
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+            if (res.ok) { await onRefreshData(); setIsTransactionModalOpen(false); } else { const err = await res.json(); alert(`Erro ao salvar: ${err.error || 'Erro desconhecido'}`); }
+        } catch (error) { console.error(error); alert("Erro de conexão com o servidor."); }
     };
 
     const handleDeleteTransaction = async (id: string) => {
@@ -225,23 +195,12 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         e.preventDefault();
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
-        
-        const payload = { 
-            ...investFormData, 
-            amount: parseFloat(investFormData.amount), 
-            yieldRate: parseFloat(investFormData.yieldRate) 
-        };
-        
+        const payload = { ...investFormData, amount: parseFloat(investFormData.amount), yieldRate: parseFloat(investFormData.yieldRate) };
         const url = editingInvestId ? `/api/investments/${editingInvestId}` : '/api/investments';
         const method = editingInvestId ? 'PUT' : 'POST';
         try {
             const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
-            if (res.ok) {
-                await onRefreshData();
-                setIsInvestModalOpen(false);
-            } else {
-                 alert("Erro ao salvar investimento.");
-            }
+            if (res.ok) { await onRefreshData(); setIsInvestModalOpen(false); } else { alert("Erro ao salvar investimento."); }
         } catch (e) { console.error(e); }
     };
 
@@ -258,18 +217,8 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         const token = localStorage.getItem('alfred_token');
         if (!token) return;
         try {
-            const res = await fetch('/api/goals', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(goalFormData)
-            });
-            if (res.ok) {
-                await onRefreshData(); 
-                setIsGoalModalOpen(false); 
-                setGoalFormData({ name: '', targetAmount: '', deadline: '' });
-            } else {
-                alert("Erro ao criar meta.");
-            }
+            const res = await fetch('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(goalFormData) });
+            if (res.ok) { await onRefreshData(); setIsGoalModalOpen(false); setGoalFormData({ name: '', targetAmount: '', deadline: '' }); } else { alert("Erro ao criar meta."); }
         } catch (e) { console.error(e); }
     };
 
@@ -283,17 +232,11 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
     const handleUpdateGoalBalance = async (id: string, isAddition: boolean) => {
         const valStr = goalValues[id];
         if (!valStr || isNaN(Number(valStr)) || Number(valStr) <= 0) return;
-        
         const amount = isAddition ? parseFloat(valStr) : -parseFloat(valStr);
         const token = localStorage.getItem('alfred_token');
         try {
-            await fetch(`/api/goals/${id}/entry`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ amount })
-            });
-            setGoalValues(prev => ({ ...prev, [id]: '' })); // Limpa input
-            onRefreshData();
+            await fetch(`/api/goals/${id}/entry`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ amount }) });
+            setGoalValues(prev => ({ ...prev, [id]: '' })); onRefreshData();
         } catch (e) { console.error(e); }
     };
 
@@ -302,11 +245,36 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
         const token = localStorage.getItem('alfred_token');
         try {
             const res = await fetch(`/api/goals/${id}/entries`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setGoalHistory(data);
-            }
+            if (res.ok) { const data = await res.json(); setGoalHistory(data); }
         } catch (e) { console.error(e); }
+    };
+
+    // --- HANDLERS TAREFAS ---
+    const handleSubmitTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const token = localStorage.getItem('alfred_token');
+        if (!token) return;
+        const url = editingTaskId ? `/api/tasks/${editingTaskId}` : '/api/tasks';
+        const method = editingTaskId ? 'PUT' : 'POST';
+        try {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(taskFormData) });
+            if (res.ok) { await onRefreshData(); setIsTaskModalOpen(false); } else { alert("Erro ao salvar tarefa."); }
+        } catch (e) { console.error(e); }
+    };
+
+    const handleToggleTask = async (id: string) => {
+        const token = localStorage.getItem('alfred_token');
+        try {
+             await fetch(`/api/tasks/${id}/toggle`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+             onRefreshData();
+        } catch(e) { console.error(e); }
+    };
+
+    const handleDeleteTask = async (id: string) => {
+        if (!confirm("Remover esta tarefa?")) return;
+        const token = localStorage.getItem('alfred_token');
+        await fetch(`/api/tasks/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        onRefreshData();
     };
 
     // Auxiliares de modal
@@ -321,9 +289,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
 
     const openEditModal = (t: Transaction) => {
         setEditingId(t.id);
-        // Ajuste de data para o input (pegar apenas yyyy-mm-dd)
         const dateStr = t.date.toString().split('T')[0];
-        
         setFormData({
             description: t.description, amount: t.amount.toString(), type: t.type, category: t.category, accountId: t.accountId, date: dateStr,
             recurrencePeriod: t.recurrencePeriod || 'NONE', recurrenceInterval: t.recurrenceInterval || 1, recurrenceLimit: t.recurrenceLimit ? t.recurrenceLimit.toString() : ''
@@ -340,6 +306,17 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
             setInvestFormData({ name: '', type: InvestmentType.CDB, amount: '', yieldRate: '', redemptionTerms: 'No Vencimento', startDate: new Date().toISOString().split('T')[0] });
         }
         setIsInvestModalOpen(true);
+    };
+
+    const openTaskModal = (task?: Task) => {
+        if (task) {
+            setEditingTaskId(task.id);
+            setTaskFormData({ description: task.description, dueDate: new Date(task.dueDate).toISOString().split('T')[0], priority: task.priority, recurrence: task.recurrence });
+        } else {
+            setEditingTaskId(null);
+            setTaskFormData({ description: '', dueDate: new Date().toISOString().split('T')[0], priority: TaskPriority.MEDIUM, recurrence: 'NONE' });
+        }
+        setIsTaskModalOpen(true);
     };
 
     return (
@@ -365,6 +342,9 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                     <button onClick={() => setActiveView('GOALS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'GOALS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
                         <Flag size={20} /> Metas e Objetivos
                     </button>
+                    <button onClick={() => setActiveView('TASKS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeView === 'TASKS' ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-800'}`}>
+                        <CheckSquare size={20} /> Tarefas
+                    </button>
                 </nav>
                 <div className="p-4 border-t border-slate-800">
                     <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all">
@@ -378,7 +358,7 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                 <header className="h-auto min-h-[80px] border-b border-slate-800 bg-slate-950/95 backdrop-blur flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4 z-20">
                     <div className="flex items-center gap-4 w-full md:w-auto">
                          <h2 className="text-xl font-bold text-white">
-                             {activeView === 'FINANCE' ? 'Gestão Financeira' : activeView === 'INVESTMENTS' ? 'Carteira de Ativos' : 'Planejamento de Metas'}
+                             {activeView === 'FINANCE' ? 'Gestão Financeira' : activeView === 'INVESTMENTS' ? 'Carteira de Ativos' : activeView === 'GOALS' ? 'Planejamento de Metas' : 'Gerenciador de Tarefas'}
                          </h2>
                     </div>
                     
@@ -420,6 +400,11 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                     {activeView === 'GOALS' && (
                         <button onClick={() => setIsGoalModalOpen(true)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95 whitespace-nowrap">
                             <Plus size={18} /> Nova Meta
+                        </button>
+                    )}
+                    {activeView === 'TASKS' && (
+                         <button onClick={() => openTaskModal()} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all active:scale-95 whitespace-nowrap">
+                            <Plus size={18} /> Nova Tarefa
                         </button>
                     )}
                 </header>
@@ -637,6 +622,53 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                             </div>
                         </>
                     )}
+
+                    {/* === VIEW: TAREFAS (TASKS) === */}
+                    {activeView === 'TASKS' && (
+                         <>
+                            {/* KPIs Tarefas */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <StatCard title="Total Tarefas" value={totalTasks.toString()} icon={<CheckSquare size={24} className="text-blue-400" />} colorClass="bg-blue-500 text-blue-400" />
+                                <StatCard title="Concluídas" value={completedTasks.toString()} icon={<CheckCircle size={24} className="text-emerald-400" />} colorClass="bg-emerald-500 text-emerald-400" />
+                                <StatCard title="Pendentes" value={pendingTasks.toString()} icon={<AlertCircle size={24} className="text-amber-400" />} colorClass="bg-amber-500 text-amber-400" />
+                            </div>
+
+                            {/* Lista de Tarefas */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                                <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                                    <h3 className="font-bold text-white">Lista de Tarefas</h3>
+                                </div>
+                                <div className="divide-y divide-slate-800">
+                                    {tasks.map(task => (
+                                        <div key={task.id} className={`p-4 hover:bg-slate-800/50 flex items-center justify-between group transition-all ${task.isCompleted ? 'opacity-50' : ''}`}>
+                                            <div className="flex items-center gap-4">
+                                                <button onClick={() => handleToggleTask(task.id)} className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${task.isCompleted ? 'bg-emerald-500 border-emerald-500 text-slate-900' : 'border-slate-600 hover:border-emerald-500'}`}>
+                                                    {task.isCompleted && <CheckCircle size={16} />}
+                                                </button>
+                                                <div>
+                                                    <p className={`font-bold text-sm ${task.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>{task.description}</p>
+                                                    <div className="flex gap-2 text-xs text-slate-500 items-center mt-1">
+                                                        <span className="flex items-center gap-1"><Clock size={12} /> {new Date(task.dueDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                                                            task.priority === TaskPriority.HIGH ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                                            task.priority === TaskPriority.MEDIUM ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                                            'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                                                        }`}>{task.priority === 'HIGH' ? 'Alta' : task.priority === 'MEDIUM' ? 'Média' : 'Baixa'}</span>
+                                                        {task.recurrence !== 'NONE' && <span className="bg-slate-800 px-1 rounded flex items-center gap-1"><Repeat size={10} /> {task.recurrence}</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openTaskModal(task)} className="p-2 hover:bg-blue-500/20 rounded text-slate-500 hover:text-blue-400"><Edit2 size={16} /></button>
+                                                <button onClick={() => handleDeleteTask(task.id)} className="p-2 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {tasks.length === 0 && <div className="p-8 text-center text-slate-500">Nenhuma tarefa encontrada.</div>}
+                                </div>
+                            </div>
+                         </>
+                    )}
                 </div>
 
                 {/* --- MODAIS --- */}
@@ -789,6 +821,49 @@ export const Dashboard: React.FC<DashboardProps & { investments?: Investment[], 
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                 {/* Modal Tarefa */}
+                 {isTaskModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md p-6 shadow-2xl">
+                             <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-white">{editingTaskId ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
+                                <button onClick={() => setIsTaskModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                            </div>
+                            <form onSubmit={handleSubmitTask} className="space-y-4">
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold">Descrição</label>
+                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-purple-500 focus:outline-none" value={taskFormData.description} onChange={e => setTaskFormData({...taskFormData, description: e.target.value})} placeholder="Ex: Pagar conta de luz" required />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-slate-500 uppercase font-bold">Data Limite</label>
+                                        <input type="date" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-purple-500 focus:outline-none" value={taskFormData.dueDate} onChange={e => setTaskFormData({...taskFormData, dueDate: e.target.value})} required />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-slate-500 uppercase font-bold">Prioridade</label>
+                                        <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-purple-500 focus:outline-none" value={taskFormData.priority} onChange={e => setTaskFormData({...taskFormData, priority: e.target.value as TaskPriority})}>
+                                            <option value="LOW">Baixa</option>
+                                            <option value="MEDIUM">Média</option>
+                                            <option value="HIGH">Alta</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold">Recorrência</label>
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:border-purple-500 focus:outline-none" value={taskFormData.recurrence} onChange={e => setTaskFormData({...taskFormData, recurrence: e.target.value as RecurrencePeriod})}>
+                                        <option value="NONE">Nenhuma</option>
+                                        <option value="DAILY">Diária</option>
+                                        <option value="WEEKLY">Semanal</option>
+                                        <option value="MONTHLY">Mensal</option>
+                                        <option value="YEARLY">Anual</option>
+                                    </select>
+                                </div>
+                                <button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition-colors">{editingTaskId ? 'Salvar' : 'Adicionar Tarefa'}</button>
+                            </form>
                         </div>
                     </div>
                 )}

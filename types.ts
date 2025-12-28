@@ -81,6 +81,22 @@ export interface Goal {
   entries?: GoalEntry[]; // Histórico opcional ao carregar lista
 }
 
+// Novos Tipos para Tarefas
+export enum TaskPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+}
+
+export interface Task {
+  id: string;
+  description: string;
+  dueDate: string;
+  priority: TaskPriority;
+  recurrence: RecurrencePeriod;
+  isCompleted: boolean;
+}
+
 export interface CreditCard {
   id: string;
   name: string;

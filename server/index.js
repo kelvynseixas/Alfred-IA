@@ -128,6 +128,20 @@ const runMigrations = async () => {
                 date TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        // Tabela de Tarefas (Tasks)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS tasks (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                description TEXT NOT NULL,
+                due_date DATE,
+                priority VARCHAR(20) DEFAULT 'MEDIUM',
+                recurrence VARCHAR(20) DEFAULT 'NONE',
+                is_completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
         
         // Seed Admin User
         const adminEmail = 'admin@alfred.local';
@@ -224,13 +238,22 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
             WHERE user_id = $1
             ORDER BY deadline ASC
         `, [userId]);
+
+        const tasksRes = await pool.query(`
+            SELECT
+                id, description, due_date as "dueDate", priority, recurrence, is_completed as "isCompleted"
+            FROM tasks
+            WHERE user_id = $1
+            ORDER BY is_completed ASC, due_date ASC
+        `, [userId]);
         
         res.json({
             user: userRes.rows[0],
             accounts: accountsRes.rows,
             transactions: transactionsRes.rows,
             investments: investmentsRes.rows,
-            goals: goalsRes.rows
+            goals: goalsRes.rows,
+            tasks: tasksRes.rows
         });
     } catch (e) {
         console.error(e);
@@ -390,6 +413,58 @@ app.delete('/api/goals/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// --- TASKS CRUD ---
+app.post('/api/tasks', authenticateToken, async (req, res) => {
+    const { description, dueDate, priority, recurrence } = req.body;
+    try {
+        await pool.query(
+            `INSERT INTO tasks (user_id, description, due_date, priority, recurrence)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [req.user.id, description, dueDate, priority, recurrence]
+        );
+        res.status(201).json({ message: 'Tarefa criada' });
+    } catch (e) {
+        console.error("Erro insert tarefa:", e);
+        res.status(500).json({ error: 'Erro ao salvar tarefa: ' + e.message });
+    }
+});
+
+app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { description, dueDate, priority, recurrence } = req.body;
+    try {
+        await pool.query(
+            `UPDATE tasks SET description=$1, due_date=$2, priority=$3, recurrence=$4
+             WHERE id=$5 AND user_id=$6`,
+            [description, dueDate, priority, recurrence, id, req.user.id]
+        );
+        res.json({ message: 'Tarefa atualizada' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao atualizar tarefa' });
+    }
+});
+
+app.patch('/api/tasks/:id/toggle', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query(
+            `UPDATE tasks SET is_completed = NOT is_completed WHERE id = $1 AND user_id = $2`,
+            [id, req.user.id]
+        );
+        res.json({ message: 'Status alterado' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao alterar status' });
+    }
+});
+
+app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        res.json({ message: 'Tarefa removida' });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao deletar tarefa' });
+    }
+});
 
 const startServer = async () => {
     await runMigrations();

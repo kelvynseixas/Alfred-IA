@@ -1,4 +1,11 @@
 
+[v1.0.5] - Painel de Tarefas (To-Do)
+- ADIÇÃO: Módulo de Tarefas acessível via Sidebar.
+- ADIÇÃO: Tabela de Tarefas (Tasks) no Banco de Dados (PostgreSQL).
+- ADIÇÃO: Rotas de API para CRUD de tarefas e alternância de status (Concluído/Pendente).
+- ADIÇÃO: Cards de KPI para tarefas (Total, Concluídas, Pendentes).
+- ADIÇÃO: Lista de tarefas com priorização visual (Alta, Média, Baixa) e recorrência.
+
 [v1.0.4] - Correções de Ambiente e Visualização
 - CORREÇÃO: Arquivo .env do servidor forçado com as credenciais corretas fornecidas pelo usuário.
 - CORREÇÃO: Lógica de filtro de data no Dashboard ajustada para evitar o problema de fuso horário onde lançamentos de "Hoje" apareciam como "Ontem" ou sumiam.
