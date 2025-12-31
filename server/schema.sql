@@ -1,7 +1,11 @@
--- Habilita extensão para UUIDs (opcional, mas boa prática, mantendo SERIAL por compatibilidade com código atual)
+-- Habilita extensão para UUIDs
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. TABELA DE PLANOS (SaaS)
+-- ==============================================================================
+-- 1. CRIAÇÃO DE TABELAS (Estrutura Base)
+-- ==============================================================================
+
+-- Tabela de Planos (SaaS)
 CREATE TABLE IF NOT EXISTS plans (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
@@ -12,18 +16,18 @@ CREATE TABLE IF NOT EXISTS plans (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. TABELA DE CONFIGURAÇÕES GLOBAIS
+-- Tabela de Configurações Globais
 CREATE TABLE IF NOT EXISTS settings (
     key VARCHAR(50) PRIMARY KEY,
     value TEXT
 );
 
--- 3. TABELA DE USUÁRIOS
+-- Tabela de Usuários
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255), -- Pode ser null se criado via social login futuro
     phone VARCHAR(20),
     role VARCHAR(20) DEFAULT 'USER', -- 'USER', 'ADMIN'
     plan_id INTEGER REFERENCES plans(id),
@@ -32,7 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. CONTAS (Carteiras/Bancos)
+-- Contas (Carteiras/Bancos)
 CREATE TABLE IF NOT EXISTS accounts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -43,7 +47,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. TRANSAÇÕES FINANCEIRAS
+-- Transações Financeiras
 CREATE TABLE IF NOT EXISTS transactions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -55,11 +59,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     date TIMESTAMP NOT NULL,
     recurrence_period VARCHAR(20) DEFAULT 'NONE', -- 'NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'
     recurrence_interval INTEGER DEFAULT 1,
-    recurrence_limit INTEGER, -- Quantas vezes repete (null = infinito)
+    recurrence_limit INTEGER, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. INVESTIMENTOS
+-- Investimentos
 CREATE TABLE IF NOT EXISTS investments (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -71,7 +75,7 @@ CREATE TABLE IF NOT EXISTS investments (
     start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. METAS
+-- Metas
 CREATE TABLE IF NOT EXISTS goals (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -81,7 +85,7 @@ CREATE TABLE IF NOT EXISTS goals (
     deadline TIMESTAMP
 );
 
--- 8. TAREFAS
+-- Tarefas
 CREATE TABLE IF NOT EXISTS tasks (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -93,7 +97,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 9. LISTAS DE COMPRAS/DESEJOS
+-- Listas de Compras/Desejos
 CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -111,7 +115,7 @@ CREATE TABLE IF NOT EXISTS list_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 10. NOTIFICAÇÕES DO SISTEMA
+-- Notificações
 CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -121,9 +125,41 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- =============================================
--- SEEDS (DADOS INICIAIS)
--- =============================================
+-- ==============================================================================
+-- 2. AUTO-REPAIR (Adiciona colunas faltantes em tabelas antigas)
+-- ==============================================================================
+
+DO $$
+BEGIN
+    -- Fix: Adicionar password_hash se não existir na tabela users antiga
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='password_hash') THEN
+        ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) DEFAULT 'placeholder';
+    END IF;
+
+    -- Fix: Adicionar role se não existir
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
+        ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'USER';
+    END IF;
+
+    -- Fix: Adicionar plan_status se não existir
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='plan_status') THEN
+        ALTER TABLE users ADD COLUMN plan_status VARCHAR(20) DEFAULT 'ACTIVE';
+    END IF;
+
+    -- Fix: Adicionar plan_id se não existir
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='plan_id') THEN
+        ALTER TABLE users ADD COLUMN plan_id INTEGER REFERENCES plans(id);
+    END IF;
+    
+    -- Fix: Adicionar plan_expires_at se não existir
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='plan_expires_at') THEN
+        ALTER TABLE users ADD COLUMN plan_expires_at TIMESTAMP;
+    END IF;
+END $$;
+
+-- ==============================================================================
+-- 3. SEEDS (Dados Iniciais)
+-- ==============================================================================
 
 -- Inserir Planos Padrão (Se não existirem)
 INSERT INTO plans (name, price, period, features) 
@@ -138,8 +174,8 @@ INSERT INTO plans (name, price, period, features)
 SELECT 'Plano Vitalício', 147.00, 'LIFETIME', ARRAY['Acesso Eterno', 'Atualizações Futuras', 'Suporte VIP']
 WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = 'Plano Vitalício');
 
--- Inserir Usuário Admin Master (Senha temporária será hashada pelo backend na inicialização se necessário, 
--- mas idealmente inserimos um hash válido aqui. O hash abaixo é para 'Alfred@1992')
+-- Inserir Usuário Admin Master 
+-- A senha 'placeholder' será substituída pelo hash correto na inicialização do index.js
 INSERT INTO users (name, email, password_hash, role, plan_status)
-SELECT 'Admin Master', 'maisalem.md@gmail.com', '$2a$10$X7V.j.X.X.X.X.X.X.X.X.X.X.X.X.X', 'ADMIN', 'ACTIVE'
+SELECT 'Admin Master', 'maisalem.md@gmail.com', 'placeholder', 'ADMIN', 'ACTIVE'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'maisalem.md@gmail.com');
