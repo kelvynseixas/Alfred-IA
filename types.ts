@@ -8,25 +8,31 @@ export enum TransactionType {
 export type RecurrencePeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 export type DateRangeOption = 'TODAY' | 'YESTERDAY' | '7D' | '15D' | '30D' | '60D' | '90D' | 'CUSTOM';
 
-export enum AccountType {
-  CHECKING = 'CHECKING',
-  SAVINGS = 'SAVINGS',
-  INVESTMENT = 'INVESTMENT',
-  WALLET = 'WALLET',
+export interface Plan {
+    id: number;
+    name: string;
+    price: string; // Vem como string do numeric do PG
+    period: string;
+    features: string[];
 }
 
-export enum ProfileType {
-  PERSONAL = 'PERSONAL',
-  BUSINESS = 'BUSINESS',
-  COUPLE = 'COUPLE',
-}
-
-export interface Account {
+export interface User {
   id: string;
   name: string;
-  type: AccountType;
-  balance: number;
-  color?: string;
+  email: string;
+  phone?: string;
+  role: 'USER' | 'ADMIN';
+  plan_status: string;
+  plan_name?: string;
+  plan_expires_at?: string;
+}
+
+export interface Notification {
+    id: number;
+    title: string;
+    message: string;
+    is_read: boolean;
+    created_at: string;
 }
 
 export interface Transaction {
@@ -37,14 +43,19 @@ export interface Transaction {
   category: string;
   date: string;
   accountId: string;
-  cardId?: string;
-  // Campos de Recorrência
   recurrencePeriod?: RecurrencePeriod;
   recurrenceInterval?: number;
   recurrenceLimit?: number;
 }
 
-// Novos Tipos para Investimentos
+export interface Account {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  color?: string;
+}
+
 export enum InvestmentType {
   CDB = 'CDB',
   TESOURO = 'TESOURO',
@@ -60,16 +71,9 @@ export interface Investment {
   name: string;
   type: InvestmentType;
   amount: number;
-  yieldRate: number; // Porcentagem anual
-  redemptionTerms: string; // Ex: D+1, No Vencimento
+  yieldRate: number;
+  redemptionTerms: string;
   startDate: string;
-}
-
-// Novos Tipos para Metas
-export interface GoalEntry {
-  id: string;
-  amount: number; // Pode ser positivo ou negativo
-  date: string;
 }
 
 export interface Goal {
@@ -78,10 +82,14 @@ export interface Goal {
   targetAmount: number;
   currentAmount: number;
   deadline: string;
-  entries?: GoalEntry[]; // Histórico opcional ao carregar lista
 }
 
-// Novos Tipos para Tarefas
+export interface GoalEntry {
+  id: string;
+  amount: number;
+  date: string;
+}
+
 export enum TaskPriority {
   LOW = 'LOW',
   MEDIUM = 'MEDIUM',
@@ -97,7 +105,6 @@ export interface Task {
   isCompleted: boolean;
 }
 
-// Novos Tipos para Listas
 export enum ListType {
     SUPPLIES = 'SUPPLIES',
     WISHES = 'WISHES'
@@ -116,31 +123,4 @@ export interface ShoppingList {
     name: string;
     type: ListType;
     items?: ListItem[];
-}
-
-export interface CreditCard {
-  id: string;
-  name: string;
-  limit: number;
-  availableLimit: number;
-  closingDay: number;
-  dueDay: number;
-}
-
-export interface FinancialProfile {
-    id: string;
-    name: string;
-    type: ProfileType;
-    accounts: Account[];
-    transactions: Transaction[];
-    creditCards: CreditCard[];
-    goals: Goal[];
-}
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  activeProfileId: string;
-  profiles: FinancialProfile[];
 }
