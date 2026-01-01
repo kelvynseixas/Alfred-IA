@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, Loader2, Home, KeyRound, UserPlus } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, Home, KeyRound, UserPlus, CheckCircle } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
@@ -9,13 +9,18 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegisterClick }) => {
-  const [view, setView] = useState<'LOGIN' | 'FORGOT'>('LOGIN');
+  const [view, setView] = useState<'LOGIN' | 'FORGOT' | 'RESET'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // States para Reset
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -43,12 +48,54 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
           const data = await res.json();
           
           if (res.ok) {
-              setSuccessMsg('Um link de redefinição foi enviado para o seu e-mail.');
+              setSuccessMsg('Um link de redefinição foi enviado.');
+              
+              // SIMULAÇÃO PARA AMBIENTE SEM EMAIL:
+              // Se o backend retornou um token de debug, vamos direto para a tela de reset
+              if (data.debug_token) {
+                  setTimeout(() => {
+                      setResetToken(data.debug_token);
+                      setView('RESET');
+                      setSuccessMsg(''); // Limpa msg para a próxima tela
+                  }, 1500); // Pequeno delay para o usuário ler a mensagem de sucesso
+              }
           } else {
               setError(data.error || 'Erro ao solicitar redefinição.');
           }
       } catch (err) {
           setError('Erro de conexão com o servidor.');
+      }
+      setIsLoading(false);
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (newPassword !== confirmPassword) {
+          setError('As senhas não coincidem.');
+          return;
+      }
+
+      setIsLoading(true);
+      try {
+          const res = await fetch('/api/auth/reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: resetToken, newPassword })
+          });
+          
+          if (res.ok) {
+              setSuccessMsg('Senha alterada com sucesso! Você pode entrar agora.');
+              setTimeout(() => {
+                  setView('LOGIN');
+                  setPassword(''); // Limpa o campo para o usuário digitar a nova
+                  setSuccessMsg('Senha atualizada. Faça login.');
+              }, 2000);
+          } else {
+              const data = await res.json();
+              setError(data.error || 'Falha ao redefinir senha.');
+          }
+      } catch (e) {
+          setError('Erro de conexão.');
       }
       setIsLoading(false);
   };
@@ -63,12 +110,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
         <div className="text-center mb-8">
             <h1 className="text-3xl font-serif font-bold text-white">Alfred IA</h1>
             <p className="text-slate-500 mt-2">
-                {view === 'LOGIN' ? 'Acesse sua propriedade, Senhor.' : 'Recuperação de Acesso'}
+                {view === 'LOGIN' ? 'Acesse sua propriedade, Senhor.' : view === 'FORGOT' ? 'Recuperação de Acesso' : 'Nova Senha'}
             </p>
         </div>
 
-        {view === 'LOGIN' ? (
+        {view === 'LOGIN' && (
             <form className="space-y-4" onSubmit={handleLoginSubmit}>
+                {successMsg && <p className="text-emerald-500 text-xs text-center font-bold bg-emerald-500/10 p-2 rounded flex items-center justify-center gap-2"><CheckCircle size={14}/> {successMsg}</p>}
+
                 <div className="relative">
                     <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
                     <input 
@@ -111,10 +160,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
                     </button>
                 </div>
             </form>
-        ) : (
+        )}
+
+        {view === 'FORGOT' && (
             <form className="space-y-4" onSubmit={handleForgotPasswordSubmit}>
                 <p className="text-sm text-slate-400 text-center mb-4">
-                    Informe o e-mail associado à sua conta e enviaremos um link para redefinir sua senha.
+                    Informe o e-mail associado à sua conta.
                 </p>
                 
                 <div className="relative">
@@ -129,7 +180,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
                 </div>
 
                 {error && <p className="text-red-500 text-xs text-center font-bold bg-red-500/10 p-2 rounded">{error}</p>}
-                {successMsg && <p className="text-emerald-500 text-xs text-center font-bold bg-emerald-500/10 p-2 rounded">{successMsg}</p>}
+                {successMsg && <p className="text-emerald-500 text-xs text-center font-bold bg-emerald-500/10 p-2 rounded animate-pulse">{successMsg}</p>}
 
                 <button type="submit" disabled={isLoading || !!successMsg} className="w-full bg-primary hover:bg-primary-dark text-slate-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50">
                     {isLoading ? <Loader2 className="animate-spin" /> : 'Enviar Link de Redefinição'}
@@ -138,6 +189,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
 
                 <button type="button" onClick={() => { setView('LOGIN'); setError(''); setSuccessMsg(''); }} className="w-full text-slate-400 hover:text-white py-2 text-sm">
                     Voltar ao Login
+                </button>
+            </form>
+        )}
+
+        {view === 'RESET' && (
+            <form className="space-y-4" onSubmit={handleResetSubmit}>
+                <p className="text-sm text-slate-400 text-center mb-4">
+                    Crie uma nova senha segura para sua conta.
+                </p>
+                
+                <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                    <input 
+                    type="password" 
+                    placeholder="Nova Senha" 
+                    required 
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    className="w-full p-3 pl-10 rounded-lg border bg-slate-800 border-slate-700 text-white focus:outline-none focus:border-primary" />
+                </div>
+
+                <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                    <input 
+                    type="password" 
+                    placeholder="Confirmar Nova Senha" 
+                    required 
+                    value={confirmPassword} 
+                    onChange={e => setConfirmPassword(e.target.value)} 
+                    className="w-full p-3 pl-10 rounded-lg border bg-slate-800 border-slate-700 text-white focus:outline-none focus:border-primary" />
+                </div>
+
+                {error && <p className="text-red-500 text-xs text-center font-bold bg-red-500/10 p-2 rounded">{error}</p>}
+                {successMsg && <p className="text-emerald-500 text-xs text-center font-bold bg-emerald-500/10 p-2 rounded">{successMsg}</p>}
+
+                <button type="submit" disabled={isLoading} className="w-full bg-primary hover:bg-primary-dark text-slate-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50">
+                    {isLoading ? <Loader2 className="animate-spin" /> : 'Alterar Senha'}
+                    {!isLoading && <CheckCircle size={18} />}
                 </button>
             </form>
         )}
