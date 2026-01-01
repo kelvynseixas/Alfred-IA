@@ -38,9 +38,10 @@ pool.connect((err, client, release) => {
 
 pool.on('error', (err, client) => {
     console.error('❌ Erro inesperado no cliente DB ocioso', err);
+    // Não sair do processo para evitar loop do PM2, apenas logar
 });
 
-// --- MIGRATIONS AUTOMÁTICAS E CORREÇÃO DE SENHA ---
+// --- MIGRATIONS AUTOMÁTICAS ---
 const runMigrations = async () => {
     try {
         const client = await pool.connect();
@@ -48,27 +49,23 @@ const runMigrations = async () => {
         
         if (fs.existsSync(schemaPath)) {
             const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+            // Executa o Schema (incluindo os ALTER TABLE que corrigem o banco)
             await client.query(schemaSql);
-            console.log("✅ Schema SQL verificado.");
+            console.log("✅ Schema SQL verificado e corrigido.");
             
-            // --- CORREÇÃO FORÇADA DE SENHA DO ADMIN ---
+            // Corrige a senha do Admin Padrão
             try {
-                // ATUALIZADO: Senha com 'A' maiúsculo conforme solicitado
-                const defaultPass = 'Alfred@1992';
+                const defaultPass = 'alfred@1992';
                 const hashedPassword = await bcrypt.hash(defaultPass, 10);
                 
-                // Atualiza SEMPRE para garantir acesso correto
-                const updateRes = await client.query(`
+                await client.query(`
                     UPDATE users SET password_hash = $1 
-                    WHERE email = 'maisalem.md@gmail.com'
+                    WHERE email = 'maisalem.md@gmail.com' 
+                    AND (password_hash LIKE '%INSERT_VALID_HASH_HERE%' OR password_hash = 'placeholder')
                 `, [hashedPassword]);
-
-                if (updateRes.rowCount > 0) {
-                    console.log("🔐 SENHA ADMIN RESTAURADA: Alfred@1992");
-                    console.log("   Login: maisalem.md@gmail.com");
-                }
+                console.log("🔐 Senha do Admin verificada.");
             } catch (errPass) {
-                console.error("⚠️ Erro ao atualizar senha do admin:", errPass.message);
+                console.error("⚠️ Erro ao atualizar senha do admin (não crítico):", errPass.message);
             }
         }
         client.release();
@@ -106,27 +103,32 @@ const isAdmin = async (req, res, next) => {
 // --- ROTAS DE AUTENTICAÇÃO ---
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
-    console.log(`\n🔑 Login tentativa: ${email}`);
+    console.log(`\n🔑 Tentativa de Login: ${email}`);
 
     try {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         
         if (result.rowCount === 0) {
-            console.log("❌ Usuário não encontrado no banco.");
+            console.log("❌ Usuário não encontrado.");
             return res.status(404).json({ error: 'Usuário não encontrado.' });
         }
         
         const user = result.rows[0];
+        
+        // Verificação defensiva se a coluna password_hash existir (agora garantido pelo schema)
+        if (!user.password_hash) {
+            console.error("❌ ERRO GRAVE: Usuário encontrado mas sem hash de senha.");
+            return res.status(500).json({ error: 'Erro na estrutura do usuário. Contate suporte.' });
+        }
 
-        // Comparação de senha
         const validPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!validPassword) {
-            console.log(`❌ Senha incorreta para o usuário ${user.name}`);
+            console.log("❌ Senha incorreta.");
             return res.status(401).json({ error: 'Senha incorreta.' });
         }
         
-        console.log(`✅ Login Sucesso: ${user.name} (${user.role})`);
+        console.log(`✅ Login Sucesso: ${user.name}`);
         const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token, role: user.role, name: user.name });
 
@@ -172,6 +174,36 @@ app.post('/api/auth/register', async (req, res) => {
     } catch (e) {
         console.error("Erro Registro:", e);
         res.status(500).json({ error: 'Erro ao registrar usuário.' });
+    }
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    console.log(`\n❓ Solicitação de redefinição de senha: ${email}`);
+    
+    try {
+        // Verifica se o email existe
+        const result = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+        
+        if (result.rowCount === 0) {
+            // Por segurança, respondemos OK mesmo se não existir, mas logamos
+            console.log("⚠️ Email não encontrado (silencioso).");
+            return res.json({ message: 'Se o email existir, um link será enviado.' });
+        }
+
+        // TODO: Em produção, aqui integraríamos com Nodemailer/SendGrid
+        // Como não temos SMTP configurado neste ambiente local, logamos o "link"
+        const resetToken = jwt.sign({ id: result.rows[0].id, type: 'reset' }, SECRET_KEY, { expiresIn: '1h' });
+        const resetLink = `http://${req.get('host')}/reset-password?token=${resetToken}`;
+        
+        console.log("📧 [SIMULAÇÃO DE EMAIL] Enviando email para:", email);
+        console.log("🔗 Link de Redefinição:", resetLink);
+        
+        res.json({ message: 'Link de redefinição enviado com sucesso.' });
+
+    } catch (e) {
+        console.error("❌ Erro no forgot-password:", e);
+        res.status(500).json({ error: 'Erro ao processar solicitação.' });
     }
 });
 

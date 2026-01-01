@@ -142,7 +142,13 @@ const App = () => {
             />
         );
       case 'login':
-        return <LoginPage onLogin={handleLogin} onBack={() => setActiveView('landing')} />;
+        return (
+            <LoginPage 
+                onLogin={handleLogin} 
+                onBack={() => setActiveView('landing')} 
+                onRegisterClick={() => setActiveView('register')} 
+            />
+        );
       case 'register':
         return <RegisterPage onRegister={handleRegister} onBack={() => setActiveView('landing')} />;
       case 'landing':
