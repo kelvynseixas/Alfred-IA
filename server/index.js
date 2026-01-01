@@ -52,12 +52,10 @@ const runMigrations = async () => {
             console.log("✅ Schema SQL verificado.");
             
             // CORREÇÃO: Força a atualização da senha do Admin Master SEMPRE que iniciar
-            // Isso resolve o problema de "senha errada" persistente
             try {
                 const defaultPass = 'alfred@1992';
                 const hashedPassword = await bcrypt.hash(defaultPass, 10);
                 
-                // Removemos o filtro de 'placeholder' para garantir que a senha seja resetada para o padrão conhecido
                 await client.query(`
                     UPDATE users SET password_hash = $1 
                     WHERE email = 'maisalem.md@gmail.com'
@@ -184,17 +182,21 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         const result = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
         
         if (result.rowCount === 0) {
-            // Retorna sucesso falso por segurança, mas aqui estamos em dev
+            // Retorna sucesso falso por segurança
             return res.json({ message: 'Se o email existir, enviamos o link.' });
         }
 
         const resetToken = jwt.sign({ id: result.rows[0].id, type: 'reset' }, SECRET_KEY, { expiresIn: '1h' });
         
-        // MODO DEV: Retornamos o token diretamente para o frontend poder simular o "clique no email"
-        res.json({ 
-            message: 'Link enviado (Simulação).', 
-            debug_token: resetToken 
-        });
+        // GERA O LINK PARA O FRONTEND (Porta 5173 padrão do Vite)
+        const resetLink = `http://localhost:5173/?resetToken=${resetToken}`;
+        
+        console.log("=========================================================");
+        console.log("📧 [SIMULAÇÃO DE EMAIL] Para redefinir, clique no link abaixo:");
+        console.log(resetLink);
+        console.log("=========================================================");
+        
+        res.json({ message: 'Link enviado.' });
 
     } catch (e) {
         console.error("Erro forgot-password:", e);

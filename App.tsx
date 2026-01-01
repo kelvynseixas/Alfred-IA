@@ -13,6 +13,7 @@ const App = () => {
   
   // Views: landing, login, register, dashboard, admin
   const [activeView, setActiveView] = React.useState('landing');
+  const [resetTokenFromUrl, setResetTokenFromUrl] = React.useState<string | null>(null);
 
   // Data States
   const [user, setUser] = React.useState<User | null>(null);
@@ -24,12 +25,24 @@ const App = () => {
   const [lists, setLists] = React.useState<ShoppingList[]>([]);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
 
+  // Verificação inicial de URL (Para Reset de Senha) e Token
   React.useEffect(() => {
-    const token = localStorage.getItem('alfred_token');
+    // Verifica se há token de reset na URL
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('resetToken');
     if (token) {
+        setResetTokenFromUrl(token);
+        setActiveView('login');
+        // Limpa a URL para ficar bonita
+        window.history.replaceState({}, document.title, "/");
+        return;
+    }
+
+    const storedToken = localStorage.getItem('alfred_token');
+    if (storedToken) {
         fetchDashboardData();
     } else {
-        setActiveView('landing');
+        if (!token) setActiveView('landing');
     }
   }, [isAuthenticated]);
 
@@ -53,14 +66,13 @@ const App = () => {
                   return { success: false, error: data.error };
               }
           } else {
-              // Resposta não é JSON (Provavelmente erro 500 HTML ou Timeout)
               const text = await res.text();
               console.error("Erro Backend não-JSON:", text);
-              return { success: false, error: 'O servidor não respondeu corretamente. Verifique o terminal do Backend.' };
+              return { success: false, error: 'Erro no servidor.' };
           }
       } catch (error) {
           console.error("Erro de conexão no login:", error);
-          return { success: false, error: 'Erro de conexão com o servidor. O backend está rodando?' };
+          return { success: false, error: 'Erro de conexão.' };
       }
   };
 
@@ -94,21 +106,18 @@ const App = () => {
         if (res.ok) {
             const data = await res.json();
             
-            if (data.user.role === 'ADMIN') {
-                setActiveView('admin');
-                setUserRole('ADMIN');
-            } else {
-                setActiveView('dashboard');
-                setUserRole('USER');
-                setUser(data.user);
-                setTransactions(data.transactions || []);
-                setAccounts(data.accounts || []);
-                setInvestments(data.investments || []);
-                setGoals(data.goals || []);
-                setTasks(data.tasks || []);
-                setLists(data.lists || []);
-                setNotifications(data.notifications || []);
-            }
+            // Alteração: Admin agora vai para o Dashboard normal inicialmente
+            setUserRole(data.user.role);
+            setActiveView('dashboard');
+            
+            setUser(data.user);
+            setTransactions(data.transactions || []);
+            setAccounts(data.accounts || []);
+            setInvestments(data.investments || []);
+            setGoals(data.goals || []);
+            setTasks(data.tasks || []);
+            setLists(data.lists || []);
+            setNotifications(data.notifications || []);
         } else {
             if (res.status === 403) handleLogout();
         }
@@ -125,7 +134,7 @@ const App = () => {
   const renderContent = () => {
     switch(activeView) {
       case 'admin':
-        return <AdminPanel onLogout={handleLogout} />;
+        return <AdminPanel onLogout={handleLogout} onBackToDashboard={() => setActiveView('dashboard')} />;
       case 'dashboard':
         return (
             <Dashboard 
@@ -139,6 +148,7 @@ const App = () => {
                 notifications={notifications}
                 onLogout={handleLogout} 
                 onRefreshData={fetchDashboardData} 
+                onNavigateToAdmin={() => setActiveView('admin')} // Passa função para ir ao Admin Panel
             />
         );
       case 'login':
@@ -147,6 +157,7 @@ const App = () => {
                 onLogin={handleLogin} 
                 onBack={() => setActiveView('landing')} 
                 onRegisterClick={() => setActiveView('register')} 
+                urlResetToken={resetTokenFromUrl} // Passa o token da URL se existir
             />
         );
       case 'register':

@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, Home, KeyRound, UserPlus, CheckCircle } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onBack: () => void;
   onRegisterClick: () => void;
+  urlResetToken?: string | null; // Novo prop
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegisterClick }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegisterClick, urlResetToken }) => {
   const [view, setView] = useState<'LOGIN' | 'FORGOT' | 'RESET'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +22,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Se receber token pela URL, vai direto para tela de Reset
+  useEffect(() => {
+    if (urlResetToken) {
+        setResetToken(urlResetToken);
+        setView('RESET');
+    }
+  }, [urlResetToken]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -48,17 +57,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
           const data = await res.json();
           
           if (res.ok) {
-              setSuccessMsg('Um link de redefinição foi enviado.');
-              
-              // SIMULAÇÃO PARA AMBIENTE SEM EMAIL:
-              // Se o backend retornou um token de debug, vamos direto para a tela de reset
-              if (data.debug_token) {
-                  setTimeout(() => {
-                      setResetToken(data.debug_token);
-                      setView('RESET');
-                      setSuccessMsg(''); // Limpa msg para a próxima tela
-                  }, 1500); // Pequeno delay para o usuário ler a mensagem de sucesso
-              }
+              setSuccessMsg('Se o e-mail estiver cadastrado, enviamos um link para redefinir sua senha.');
+              // NÃO MUDAMOS A VIEW AUTOMATICAMENTE. O usuário deve ir ao email e clicar no link.
           } else {
               setError(data.error || 'Erro ao solicitar redefinição.');
           }
@@ -89,10 +89,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
                   setView('LOGIN');
                   setPassword(''); // Limpa o campo para o usuário digitar a nova
                   setSuccessMsg('Senha atualizada. Faça login.');
+                  // Opcional: Limpar URL
               }, 2000);
           } else {
               const data = await res.json();
-              setError(data.error || 'Falha ao redefinir senha.');
+              setError(data.error || 'Link expirado ou inválido.');
           }
       } catch (e) {
           setError('Erro de conexão.');
@@ -165,7 +166,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
         {view === 'FORGOT' && (
             <form className="space-y-4" onSubmit={handleForgotPasswordSubmit}>
                 <p className="text-sm text-slate-400 text-center mb-4">
-                    Informe o e-mail associado à sua conta.
+                    Informe o e-mail. Se estiver em nossa base, enviaremos um link de recuperação.
                 </p>
                 
                 <div className="relative">
@@ -183,7 +184,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onRegiste
                 {successMsg && <p className="text-emerald-500 text-xs text-center font-bold bg-emerald-500/10 p-2 rounded animate-pulse">{successMsg}</p>}
 
                 <button type="submit" disabled={isLoading || !!successMsg} className="w-full bg-primary hover:bg-primary-dark text-slate-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50">
-                    {isLoading ? <Loader2 className="animate-spin" /> : 'Enviar Link de Redefinição'}
+                    {isLoading ? <Loader2 className="animate-spin" /> : 'Enviar Link'}
                     {!isLoading && <KeyRound size={18} />}
                 </button>
 

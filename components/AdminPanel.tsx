@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, CreditCard, Settings, Video, LogOut, Save, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, Settings, Video, LogOut, Save, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 interface AdminPanelProps {
     onLogout: () => void;
+    onBackToDashboard: () => void;
 }
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToDashboard }) => {
     const [view, setView] = useState('DASHBOARD');
     const [stats, setStats] = useState<any>(null);
     const [settings, setSettings] = useState<any>({});
@@ -50,11 +51,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout }) => {
                     <h1 className="font-bold text-white">Master Admin</h1>
                 </div>
                 <nav className="flex-1 p-4 space-y-2">
-                    <button onClick={() => setView('DASHBOARD')} className={`w-full flex items-center gap-3 px-4 py-3 rounded hover:bg-slate-800 ${view === 'DASHBOARD' ? 'bg-slate-800 text-primary' : ''}`}><LayoutDashboard size={20} /> Dashboard</button>
+                    <button onClick={() => setView('DASHBOARD')} className={`w-full flex items-center gap-3 px-4 py-3 rounded hover:bg-slate-800 ${view === 'DASHBOARD' ? 'bg-slate-800 text-primary' : ''}`}><LayoutDashboard size={20} /> Dashboard SaaS</button>
                     <button onClick={() => setView('USERS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded hover:bg-slate-800 ${view === 'USERS' ? 'bg-slate-800 text-primary' : ''}`}><Users size={20} /> Usuários</button>
                     <button onClick={() => { setView('SETTINGS'); fetchSettings(); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded hover:bg-slate-800 ${view === 'SETTINGS' ? 'bg-slate-800 text-primary' : ''}`}><Settings size={20} /> Configurações</button>
                 </nav>
-                <div className="p-4 border-t border-slate-800">
+                <div className="p-4 border-t border-slate-800 space-y-2">
+                    <button onClick={onBackToDashboard} className="w-full flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded"><ArrowLeft size={20} /> Voltar ao Meu Painel</button>
                     <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-2 text-red-400 hover:bg-red-500/10 rounded"><LogOut size={20} /> Sair</button>
                 </div>
             </aside>

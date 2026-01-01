@@ -7,7 +7,7 @@ import {
 import { 
   LayoutDashboard, LogOut, Plus, ArrowUpCircle, ArrowDownCircle, Target, Wallet, TrendingUp, 
   CalendarRange, List, Trash2, Edit2, Repeat, Briefcase, Calculator, Flag, Trophy, Minus, 
-  CheckCircle, CheckSquare, Clock, AlertCircle, ShoppingCart, User as UserIcon, Bell, Download, X, History
+  CheckCircle, CheckSquare, Clock, AlertCircle, ShoppingCart, User as UserIcon, Bell, Download, X, History, ShieldCheck
 } from 'lucide-react';
 import { ListModule } from './ListModule';
 
@@ -22,6 +22,7 @@ interface DashboardProps {
     notifications?: Notification[];
     onLogout: () => void;
     onRefreshData: () => void;
+    onNavigateToAdmin?: () => void; // Prop opcional para navegação admin
 }
 
 const formatCurrency = (val: number) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -29,7 +30,7 @@ const formatPercent = (val: number) => (val || 0).toLocaleString('pt-BR', { styl
 
 type ViewMode = 'FINANCE' | 'INVESTMENTS' | 'GOALS' | 'TASKS' | 'LISTS' | 'PROFILE';
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactions, investments = [], goals = [], tasks = [], lists = [], notifications = [], onLogout, onRefreshData }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactions, investments = [], goals = [], tasks = [], lists = [], notifications = [], onLogout, onRefreshData, onNavigateToAdmin }) => {
     
     const [activeView, setActiveView] = useState<ViewMode>('FINANCE');
     const [dateRange, setDateRange] = useState<DateRangeOption>('30D');
@@ -97,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactio
                     <div>
                         <p className="text-sm font-bold text-white truncate w-32">{user?.name}</p>
                         <p className={`text-[10px] font-bold px-1.5 rounded w-fit ${user?.plan_status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
-                            {user?.plan_name || 'Plano Básico'}
+                            {user?.role === 'ADMIN' ? 'ADMINISTRADOR' : user?.plan_name || 'Plano Básico'}
                         </p>
                     </div>
                 </div>
@@ -108,6 +109,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, accounts, transactio
                     <NavBtn active={activeView === 'GOALS'} onClick={() => setActiveView('GOALS')} icon={<Flag size={20} />} label="Metas" />
                     <NavBtn active={activeView === 'TASKS'} onClick={() => setActiveView('TASKS')} icon={<CheckSquare size={20} />} label="Tarefas" />
                     <NavBtn active={activeView === 'LISTS'} onClick={() => setActiveView('LISTS')} icon={<ShoppingCart size={20} />} label="Listas" />
+                    
+                    {/* Botão Especial de Admin */}
+                    {user?.role === 'ADMIN' && onNavigateToAdmin && (
+                        <div className="pt-4 mt-4 border-t border-slate-800">
+                            <button onClick={onNavigateToAdmin} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold bg-slate-800 text-primary hover:bg-slate-700 transition-colors border border-primary/20">
+                                <ShieldCheck size={20} /> Painel Master
+                            </button>
+                        </div>
+                    )}
                 </nav>
                 <div className="p-4 border-t border-slate-800 space-y-2">
                     <NavBtn active={activeView === 'PROFILE'} onClick={() => setActiveView('PROFILE')} icon={<UserIcon size={20} />} label="Meu Perfil" />
