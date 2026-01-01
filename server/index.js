@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 // Carrega variáveis de ambiente
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -26,7 +27,18 @@ const pool = new Pool({
 
 const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 
-// Teste de Conexão ao iniciar
+// --- CONFIGURAÇÃO DE EMAIL (Zoho) ---
+const transporter = nodemailer.createTransport({
+    host: 'smtppro.zoho.com',
+    port: 465,
+    secure: true, // true para 465, false para outras portas
+    auth: {
+        user: 'contato@maisalem.net',
+        pass: 'Seixas@1992'
+    }
+});
+
+// Teste de Conexão DB ao iniciar
 pool.connect((err, client, release) => {
     if (err) {
         console.error('❌ ERRO CRÍTICO DB: Não foi possível conectar.', err.message);
@@ -51,7 +63,7 @@ const runMigrations = async () => {
             await client.query(schemaSql);
             console.log("✅ Schema SQL verificado.");
             
-            // CORREÇÃO: Força a atualização da senha do Admin Master SEMPRE que iniciar
+            // Força a atualização da senha do Admin Master
             try {
                 const defaultPass = 'alfred@1992';
                 const hashedPassword = await bcrypt.hash(defaultPass, 10);
@@ -60,7 +72,7 @@ const runMigrations = async () => {
                     UPDATE users SET password_hash = $1 
                     WHERE email = 'maisalem.md@gmail.com'
                 `, [hashedPassword]);
-                console.log("🔐 Senha do Admin Master redefinida para: alfred@1992");
+                console.log("🔐 Senha do Admin Master verificada/atualizada.");
             } catch (errPass) {
                 console.error("⚠️ Erro ao atualizar senha do admin:", errPass.message);
             }
@@ -100,36 +112,31 @@ const isAdmin = async (req, res, next) => {
 // --- ROTAS DE AUTENTICAÇÃO ---
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
-    console.log(`\n🔑 Tentativa de Login: ${email}`);
-
+    
     try {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         
         if (result.rowCount === 0) {
-            console.log("❌ Usuário não encontrado.");
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
         
         const user = result.rows[0];
         
         if (!user.password_hash) {
-            console.error("❌ Usuário sem hash de senha.");
             return res.status(500).json({ error: 'Erro de cadastro. Contate suporte.' });
         }
 
         const validPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!validPassword) {
-            console.log("❌ Senha incorreta.");
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
         
-        console.log(`✅ Login Sucesso: ${user.name}`);
         const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token, role: user.role, name: user.name });
 
     } catch (e) {
-        console.error("❌ Erro interno no Login:", e);
+        console.error("Erro Login:", e);
         res.status(500).json({ error: 'Erro interno do servidor.' });
     }
 });
@@ -173,7 +180,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// SOLICITAR REDEFINIÇÃO
+// SOLICITAR REDEFINIÇÃO COM ENVIO DE EMAIL
 app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
     console.log(`\n❓ Solicitação de redefinição: ${email}`);
@@ -186,21 +193,38 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             return res.json({ message: 'Se o email existir, enviamos o link.' });
         }
 
-        const resetToken = jwt.sign({ id: result.rows[0].id, type: 'reset' }, SECRET_KEY, { expiresIn: '1h' });
+        const user = result.rows[0];
+        const resetToken = jwt.sign({ id: user.id, type: 'reset' }, SECRET_KEY, { expiresIn: '1h' });
         
-        // GERA O LINK PARA O FRONTEND (Porta 5173 padrão do Vite)
+        // Link apontando para o Frontend
         const resetLink = `http://localhost:5173/?resetToken=${resetToken}`;
         
-        console.log("=========================================================");
-        console.log("📧 [SIMULAÇÃO DE EMAIL] Para redefinir, clique no link abaixo:");
-        console.log(resetLink);
-        console.log("=========================================================");
+        // Configuração do Email
+        const mailOptions = {
+            from: '"Alfred IA" <contato@maisalem.net>',
+            to: email,
+            subject: 'Recuperação de Acesso - Alfred IA',
+            html: `
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h2 style="color: #f59e0b;">Recuperação de Senha</h2>
+                    <p>Olá, ${user.name}.</p>
+                    <p>Recebemos uma solicitação para redefinir sua senha de acesso ao <strong>Alfred IA</strong>.</p>
+                    <p>Clique no botão abaixo para criar uma nova senha:</p>
+                    <a href="${resetLink}" style="display: inline-block; background-color: #f59e0b; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0;">Redefinir Senha</a>
+                    <p style="font-size: 12px; color: #777;">Se você não solicitou isso, ignore este e-mail. O link expira em 1 hora.</p>
+                </div>
+            `
+        };
+
+        // Envia o Email
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Email enviado com sucesso para ${email}`);
         
-        res.json({ message: 'Link enviado.' });
+        res.json({ message: 'Link enviado para o seu e-mail.' });
 
     } catch (e) {
-        console.error("Erro forgot-password:", e);
-        res.status(500).json({ error: 'Erro ao processar.' });
+        console.error("❌ Erro ao enviar email:", e);
+        res.status(500).json({ error: 'Erro ao enviar email de recuperação.' });
     }
 });
 

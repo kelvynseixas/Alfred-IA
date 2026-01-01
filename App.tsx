@@ -106,7 +106,7 @@ const App = () => {
         if (res.ok) {
             const data = await res.json();
             
-            // Alteração: Admin agora vai para o Dashboard normal inicialmente
+            // CORREÇÃO: Admin vai para Dashboard normal inicialmente, igual a todos
             setUserRole(data.user.role);
             setActiveView('dashboard');
             
@@ -148,7 +148,7 @@ const App = () => {
                 notifications={notifications}
                 onLogout={handleLogout} 
                 onRefreshData={fetchDashboardData} 
-                onNavigateToAdmin={() => setActiveView('admin')} // Passa função para ir ao Admin Panel
+                onNavigateToAdmin={() => setActiveView('admin')} // Função para ir ao Admin Panel
             />
         );
       case 'login':
@@ -157,7 +157,7 @@ const App = () => {
                 onLogin={handleLogin} 
                 onBack={() => setActiveView('landing')} 
                 onRegisterClick={() => setActiveView('register')} 
-                urlResetToken={resetTokenFromUrl} // Passa o token da URL se existir
+                urlResetToken={resetTokenFromUrl} 
             />
         );
       case 'register':
