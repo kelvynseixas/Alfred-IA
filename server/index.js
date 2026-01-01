@@ -6,7 +6,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-// const { GoogleGenAI } = require('@google/genai'); // Descomentar quando instalado
 
 // Carrega variáveis de ambiente
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -27,26 +26,54 @@ const pool = new Pool({
 
 const SECRET_KEY = process.env.JWT_SECRET || 'alfred-default-secret';
 
-// --- MIGRATIONS AUTOMÁTICAS (Fallback se install.sh falhar) ---
+// Teste de Conexão ao iniciar
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('❌ ERRO CRÍTICO DB: Não foi possível conectar.', err.message);
+    } else {
+        console.log('✅ Conexão DB estabelecida!');
+        release();
+    }
+});
+
+pool.on('error', (err, client) => {
+    console.error('❌ Erro inesperado no cliente DB ocioso', err);
+});
+
+// --- MIGRATIONS AUTOMÁTICAS E CORREÇÃO DE SENHA ---
 const runMigrations = async () => {
     try {
         const client = await pool.connect();
         const schemaPath = path.resolve(__dirname, 'schema.sql');
+        
         if (fs.existsSync(schemaPath)) {
             const schemaSql = fs.readFileSync(schemaPath, 'utf8');
             await client.query(schemaSql);
-            console.log("✅ Schema SQL executado/verificado com sucesso.");
+            console.log("✅ Schema SQL verificado.");
             
-            // Verifica e cria hash pro admin se necessário (para garantir acesso)
-            const hashedPassword = await bcrypt.hash('Alfred@1992', 10);
-            await client.query(`
-                UPDATE users SET password_hash = $1 
-                WHERE email = 'maisalem.md@gmail.com' AND password_hash LIKE '%INSERT_VALID_HASH_HERE%'
-            `, [hashedPassword]);
+            // --- CORREÇÃO FORÇADA DE SENHA DO ADMIN ---
+            try {
+                // ATUALIZADO: Senha com 'A' maiúsculo conforme solicitado
+                const defaultPass = 'Alfred@1992';
+                const hashedPassword = await bcrypt.hash(defaultPass, 10);
+                
+                // Atualiza SEMPRE para garantir acesso correto
+                const updateRes = await client.query(`
+                    UPDATE users SET password_hash = $1 
+                    WHERE email = 'maisalem.md@gmail.com'
+                `, [hashedPassword]);
+
+                if (updateRes.rowCount > 0) {
+                    console.log("🔐 SENHA ADMIN RESTAURADA: Alfred@1992");
+                    console.log("   Login: maisalem.md@gmail.com");
+                }
+            } catch (errPass) {
+                console.error("⚠️ Erro ao atualizar senha do admin:", errPass.message);
+            }
         }
         client.release();
     } catch (e) {
-        console.error("Erro Migration:", e.message);
+        console.error("❌ Erro Fatal na Migration:", e.message);
     }
 };
 
@@ -76,24 +103,36 @@ const isAdmin = async (req, res, next) => {
     }
 };
 
-// --- ROTAS DE AUTENTICAÇÃO E ONBOARDING ---
-
+// --- ROTAS DE AUTENTICAÇÃO ---
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
+    console.log(`\n🔑 Login tentativa: ${email}`);
+
     try {
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
+        
+        if (result.rowCount === 0) {
+            console.log("❌ Usuário não encontrado no banco.");
+            return res.status(404).json({ error: 'Usuário não encontrado.' });
+        }
         
         const user = result.rows[0];
-        if (!await bcrypt.compare(password, user.password_hash)) return res.status(401).json({ error: 'Senha incorreta.' });
+
+        // Comparação de senha
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+
+        if (!validPassword) {
+            console.log(`❌ Senha incorreta para o usuário ${user.name}`);
+            return res.status(401).json({ error: 'Senha incorreta.' });
+        }
         
-        // Verifica status do plano
-        // Lógica simplificada: Se não for admin e plano cancelado/vencido, poderia bloquear aqui.
-        
+        console.log(`✅ Login Sucesso: ${user.name} (${user.role})`);
         const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token, role: user.role, name: user.name });
+
     } catch (e) {
-        res.status(500).json({ error: 'Erro interno.' });
+        console.error("❌ Erro interno no Login:", e);
+        res.status(500).json({ error: 'Erro interno do servidor.' });
     }
 });
 
@@ -105,32 +144,33 @@ app.post('/api/auth/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Calcular expiração baseada no plano
         let planStatus = 'ACTIVE';
         let expiresAt = new Date();
-        const planRes = await pool.query('SELECT * FROM plans WHERE id = $1', [planId]);
-        
-        if (planRes.rowCount > 0) {
-            const plan = planRes.rows[0];
-            if (plan.period === 'MONTHLY') expiresAt.setMonth(expiresAt.getMonth() + 1);
-            else if (plan.period === 'YEARLY') expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-            else if (plan.period === 'LIFETIME') expiresAt.setFullYear(expiresAt.getFullYear() + 99);
+        if (planId) {
+             const planRes = await pool.query('SELECT * FROM plans WHERE id = $1', [planId]);
+             if (planRes.rowCount > 0) {
+                const plan = planRes.rows[0];
+                if (plan.period === 'MONTHLY') expiresAt.setMonth(expiresAt.getMonth() + 1);
+                else if (plan.period === 'YEARLY') expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+                else if (plan.period === 'LIFETIME') expiresAt.setFullYear(expiresAt.getFullYear() + 99);
+             }
+        } else {
+             expiresAt.setMonth(expiresAt.getMonth() + 1); 
         }
 
         const userRes = await pool.query(`
             INSERT INTO users (name, email, password_hash, phone, plan_id, plan_status, plan_expires_at) 
             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
-        `, [name, email, hashedPassword, phone, planId, planStatus, expiresAt]);
+        `, [name, email, hashedPassword, phone, planId || null, planStatus, expiresAt]);
 
         const userId = userRes.rows[0].id;
 
-        // Criar carteira padrão
         await pool.query(`INSERT INTO accounts (user_id, name, type, balance, color) VALUES ($1, 'Carteira Principal', 'WALLET', 0, '#f59e0b')`, [userId]);
 
         const token = jwt.sign({ id: userId, role: 'USER' }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token });
     } catch (e) {
-        console.error(e);
+        console.error("Erro Registro:", e);
         res.status(500).json({ error: 'Erro ao registrar usuário.' });
     }
 });
@@ -144,8 +184,7 @@ app.get('/api/plans/public', async (req, res) => {
     }
 });
 
-// --- DASHBOARD DE DADOS (USER) ---
-// Mantém a lógica existente mas adiciona Notifications e User Plan Info
+// --- DASHBOARD ---
 app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
@@ -162,7 +201,6 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
         const tasksRes = await pool.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY due_date ASC', [userId]);
         const notifRes = await pool.query('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [userId]);
         
-        // Listas e Itens
         const listsRes = await pool.query('SELECT * FROM lists WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
         const lists = listsRes.rows;
         for (let list of lists) {
@@ -186,18 +224,12 @@ app.get('/api/data/dashboard', authenticateToken, async (req, res) => {
     }
 });
 
-// --- ROTAS DE ADMIN (MASTER) ---
-
+// --- ADMIN STATS ---
 app.get('/api/admin/stats', authenticateToken, isAdmin, async (req, res) => {
     try {
         const usersCount = await pool.query('SELECT COUNT(*) FROM users WHERE role != \'ADMIN\'');
         const activePlans = await pool.query("SELECT COUNT(*) FROM users WHERE plan_status = 'ACTIVE'");
-        const revenue = await pool.query(`
-            SELECT SUM(p.price) as total 
-            FROM users u JOIN plans p ON u.plan_id = p.id 
-            WHERE u.plan_status = 'ACTIVE'
-        `); // Simplificado: Idealmente teria uma tabela de invoices
-        
+        const revenue = await pool.query(`SELECT SUM(p.price) as total FROM users u JOIN plans p ON u.plan_id = p.id WHERE u.plan_status = 'ACTIVE'`);
         const recentUsers = await pool.query('SELECT id, name, email, plan_status, created_at FROM users ORDER BY created_at DESC LIMIT 10');
 
         res.json({
@@ -206,9 +238,7 @@ app.get('/api/admin/stats', authenticateToken, isAdmin, async (req, res) => {
             monthlyRevenue: parseFloat(revenue.rows[0].total || 0),
             recentUsers: recentUsers.rows
         });
-    } catch (e) {
-        res.status(500).json({ error: 'Erro stats admin' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Erro stats admin' }); }
 });
 
 app.get('/api/admin/settings', authenticateToken, isAdmin, async (req, res) => {
@@ -217,13 +247,11 @@ app.get('/api/admin/settings', authenticateToken, isAdmin, async (req, res) => {
         const settings = {};
         result.rows.forEach(row => settings[row.key] = row.value);
         res.json(settings);
-    } catch (e) {
-        res.status(500).json({ error: 'Erro settings' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Erro settings' }); }
 });
 
 app.post('/api/admin/settings', authenticateToken, isAdmin, async (req, res) => {
-    const updates = req.body; // { key: value, ... }
+    const updates = req.body; 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -235,16 +263,11 @@ app.post('/api/admin/settings', authenticateToken, isAdmin, async (req, res) => 
     } catch (e) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: 'Erro ao salvar configurações' });
-    } finally {
-        client.release();
-    }
+    } finally { client.release(); }
 });
 
-// --- ROTAS DO USUÁRIO (CRUDs existentes mantidos e expandidos) ---
-
-// Transactions (Expanded with Export logic placeholder)
+// --- TRANSAÇÕES ---
 app.post('/api/transactions', authenticateToken, async (req, res) => {
-    // Mesma lógica anterior, mas garantindo que todos os campos do schema novo sejam suportados
     const { description, amount, type, category, date, accountId, recurrencePeriod, recurrenceInterval, recurrenceLimit } = req.body;
     try {
         await pool.query(
@@ -253,9 +276,7 @@ app.post('/api/transactions', authenticateToken, async (req, res) => {
             [req.user.id, description, amount, type, category, date, accountId || null, recurrencePeriod, recurrenceInterval, recurrenceLimit]
         );
         res.status(201).json({ message: 'Salvo com sucesso' });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
@@ -266,67 +287,12 @@ app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
-    // Lógica de update simplificada para brevidade
     const { id } = req.params;
-    const { description, amount } = req.body; // ... outros campos
+    const { description, amount } = req.body; 
     try {
          await pool.query('UPDATE transactions SET description=$1, amount=$2 WHERE id=$3 AND user_id=$4', [description, amount, id, req.user.id]);
          res.json({ message: 'Atualizado' });
     } catch (e) { res.status(500).json({ error: 'Erro update' }); }
-});
-
-// --- WEBHOOK GEMINI / EVOLUTION API ---
-app.post('/api/webhook/evolution', async (req, res) => {
-    // Esta rota recebe o evento da Evolution API (WhatsApp)
-    const { data, sender } = req.body; // Estrutura simplificada da Evolution
-    
-    // Validar token de segurança do webhook (se configurado)
-    // if (req.headers['apikey'] !== process.env.WEBHOOK_SECRET) return res.sendStatus(403);
-
-    try {
-        if (!data || !data.message) return res.sendStatus(200);
-        
-        const userPhone = sender.split('@')[0]; // Remove @s.whatsapp.net
-        const messageText = data.message.conversation || data.message.extendedTextMessage?.text;
-
-        if (!messageText) return res.sendStatus(200);
-
-        // 1. Identificar usuário pelo telefone
-        const userRes = await pool.query('SELECT id, name FROM users WHERE phone LIKE $1', [`%${userPhone.slice(-8)}%`]); // Busca flexível
-        if (userRes.rowCount === 0) {
-            // Retornar mensagem de "Usuário não cadastrado" via Evolution API (mock)
-            console.log(`Mensagem de desconhecido (${userPhone}): ${messageText}`);
-            return res.sendStatus(200);
-        }
-        
-        const user = userRes.rows[0];
-
-        // 2. Chamar Gemini para processar intenção
-        // Mock da chamada pois @google/genai precisa ser instalado
-        console.log(`Processando mensagem de ${user.name}: ${messageText}`);
-        
-        /* 
-        const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        const prompt = `
-            Você é Alfred, um mordomo financeiro. O usuário disse: "${messageText}".
-            Extraia a intenção (CRIAR_TRANSACAO, LER_RESUMO, ADICIONAR_TAREFA) e os dados JSON.
-            Responda APENAS o JSON.
-        `;
-        const result = await model.generateContent(prompt);
-        const response = result.response.text();
-        // Parse JSON e executa SQL
-        */
-
-        // 3. Responder via Evolution API (Mock)
-        // await axios.post(EVOLUTION_URL + '/message/sendText', { ... });
-
-        res.json({ status: 'processed' });
-
-    } catch (e) {
-        console.error("Webhook Error:", e);
-        res.sendStatus(500);
-    }
 });
 
 // Inicialização

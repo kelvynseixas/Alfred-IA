@@ -27,7 +27,6 @@ const App = () => {
   React.useEffect(() => {
     const token = localStorage.getItem('alfred_token');
     if (token) {
-        // Tenta decodificar token simples para role ou busca user
         fetchDashboardData();
     } else {
         setActiveView('landing');
@@ -41,17 +40,27 @@ const App = () => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email, password: pass })
           });
-          const data = await res.json();
-          if (res.ok) {
-              localStorage.setItem('alfred_token', data.token);
-              setIsAuthenticated(true);
-              setUserRole(data.role);
-              return { success: true };
+          
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+              const data = await res.json();
+              if (res.ok) {
+                  localStorage.setItem('alfred_token', data.token);
+                  setIsAuthenticated(true);
+                  setUserRole(data.role);
+                  return { success: true };
+              } else {
+                  return { success: false, error: data.error };
+              }
           } else {
-              return { success: false, error: data.error };
+              // Resposta não é JSON (Provavelmente erro 500 HTML ou Timeout)
+              const text = await res.text();
+              console.error("Erro Backend não-JSON:", text);
+              return { success: false, error: 'O servidor não respondeu corretamente. Verifique o terminal do Backend.' };
           }
       } catch (error) {
-          return { success: false, error: 'Erro de conexão.' };
+          console.error("Erro de conexão no login:", error);
+          return { success: false, error: 'Erro de conexão com o servidor. O backend está rodando?' };
       }
   };
 
@@ -79,8 +88,6 @@ const App = () => {
     const token = localStorage.getItem('alfred_token');
     if (!token) return handleLogout();
 
-    // Se soubermos que é admin pelo login anterior, vai pro Admin Panel
-    // Idealmente decodificaria o JWT aqui, mas vamos esperar a resposta da API
     try {
         const res = await fetch('/api/data/dashboard', { headers: { 'Authorization': `Bearer ${token}` } });
         
@@ -103,8 +110,6 @@ const App = () => {
                 setNotifications(data.notifications || []);
             }
         } else {
-            // Se falhar dashboard mas token for válido, pode ser rota de admin exclusiva
-            // Verifica API de admin stats para validar acesso
             if (res.status === 403) handleLogout();
         }
     } catch (e) { console.error(e); }
@@ -142,22 +147,12 @@ const App = () => {
         return <RegisterPage onRegister={handleRegister} onBack={() => setActiveView('landing')} />;
       case 'landing':
       default:
-        return <LandingPage onLoginClick={() => setActiveView('login')} />; // Add Register link logic in LandingPage if needed, or modify LandingPage to expose onRegisterClick
+        return <LandingPage onLoginClick={() => setActiveView('login')} />;
     }
   }
 
-  // Modificação rápida para passar handler de registro para Landing Page se necessário, 
-  // mas como LandingPage.tsx é um arquivo separado, assumimos que o Login tem link para criar conta que mudaria o estado aqui.
-  // Vou modificar LandingPage para aceitar onRegisterClick? 
-  // O prompt original LandingPage tinha apenas onLoginClick. Vamos manter simples: Login tem link para Registro.
-  
-  // Wrapper para injetar navegação para registro via Login Page (se eu tivesse modificado Login Page para aceitar callback)
-  // Como LoginPage é estático no código anterior, assumimos que o usuário navega.
-  // UPDATE: Vou injetar um botão de "Criar Conta" na Landing Page para facilitar.
-
   return (
     <div className="bg-slate-900 text-slate-200 min-h-screen font-sans relative">
-        {/* Hack para navegação entre Login/Registro se os componentes não tiverem props explícitos */}
         {activeView === 'landing' && (
             <div className="fixed top-6 right-32 z-50">
                 <button onClick={() => setActiveView('register')} className="text-sm font-bold text-slate-300 hover:text-primary mr-4">Criar Conta</button>
